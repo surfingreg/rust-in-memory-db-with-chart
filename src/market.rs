@@ -7,7 +7,7 @@
 // TODO: diff_ema_roc
 
 use std::collections::BTreeMap;
-use crate::market_structs::{/*TickerJson,*/ UpdateL2, Subscribe, Stat};
+use crate::market_structs::{*};
 use crate::ticker::{Ticker as TickerJson} ;
 use rust_decimal::prelude::*;
 use std::thread::JoinHandle;
@@ -90,6 +90,8 @@ impl Market{
 			// stat.max_buy =  Some(*max_buy),
 
 		}
+
+		println!("[latest_stat] Tickers: {}, Asks: {}, Bids: {}", &self.tickers.len(), &self.book_sell.len(), &self.book_buy.len());
 
 		Some(stat)
 
@@ -218,7 +220,33 @@ impl Market{
 								},
 
 								Some("snapshot") => {
-									log::debug!("[ws] snapshot: {:?}", json_val);
+
+									// log::debug!("[ws] snapshot: {:?}", json_val);
+
+
+									let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
+									// log::debug!("[ws] snapshot: {:?}", snapshot_opt);
+
+									if snapshot_opt.is_some() {
+
+										let snap:Snapshot = snapshot_opt.unwrap();
+
+										for buy in &snap.bids {
+
+											&self.book_buy.insert(buy.price.clone(), buy.size.clone());
+
+										}
+
+										for sell in &snap.asks {
+
+											&self.book_sell.insert(sell.price.clone(), sell.size.clone());
+
+										}
+
+									}
+
+
+
 								},
 								_ => {
 									log::debug!("[ws] unknown type: {:?}", json_val);
