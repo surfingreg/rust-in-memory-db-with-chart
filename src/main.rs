@@ -4,6 +4,7 @@
 
 mod market;
 mod market_structs;
+mod ticker;
 
 fn main() {
 
