@@ -4,8 +4,6 @@ version = "0.1.0"
 authors = ["GregP <glp@swimr.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 
 # Chrono with serde
@@ -14,12 +12,13 @@ chrono = { version = "0.4.15", features = ["serde"]}
 
 # https://crates.io/crates/rust_decimal
 rust_decimal = "1.8.1"
-#uuid = { version = "0.8", features = ["serde", "v4"] }
+# uuid = { version = "0.8", features = ["serde", "v4"] }
 # crossbeam = "0.8.0"
 
 # websocket
-tungstenite = "0.11.1"
+tungstenite = {version = "0.11.1", features = ["native-tls"] }
 native-tls = "0.2.4"
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"
 url = "2.1.1"

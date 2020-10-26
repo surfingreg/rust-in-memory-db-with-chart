@@ -209,7 +209,7 @@ impl Market{
 											}
 											
 											// print stats on every entry
-											// &self.print_stats();
+											&self.print_stats();
 
 										}
 
