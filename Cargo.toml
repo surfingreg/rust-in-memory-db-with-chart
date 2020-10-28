@@ -13,7 +13,7 @@ chrono = { version = "0.4.15", features = ["serde"]}
 # https://crates.io/crates/rust_decimal
 rust_decimal = "1.8.1"
 # uuid = { version = "0.8", features = ["serde", "v4"] }
-# crossbeam = "0.8.0"
+crossbeam = "0.8.0"
 
 # websocket
 tungstenite = {version = "0.11.1", features = ["native-tls"] }
@@ -27,3 +27,7 @@ url = "2.1.1"
 dotenv = "0.15.0"
 log = "0.4.0"
 env_logger = "0.7.1"
+
+# Postgres
+postgres={version = "0.18.0", features = ["with-chrono-0_4"]}
+

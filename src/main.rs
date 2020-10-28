@@ -11,7 +11,5 @@ fn main() {
 	dotenv::dotenv().ok();
 	env_logger::init();
 
-	let _ = market::Market::start().join();
-
-
+	market::Market::start();
 }

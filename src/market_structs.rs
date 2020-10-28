@@ -2,9 +2,15 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use rust_decimal::prelude::*;
 
-// use rust_decimal::Decimal;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug)]
+pub enum Msg{
+	// Statistic(Stat),
+	StatVector(Vec<Stat>),
+
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Stat{
 	pub dtg:DateTime<Utc>,
 	pub dtg_last_tick:Option<DateTime<Utc>>,
@@ -17,7 +23,6 @@ pub struct Stat{
 	pub ema2:Option<Decimal>,
 	pub min_sell:Option<Decimal>,
 	pub max_buy:Option<Decimal>,
-
 }
 
 impl Stat{
@@ -54,6 +59,23 @@ impl Stat{
 			self.max_buy.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str()
 		);		
 	}
+
+/*	pub fn format(&self)-> String{
+		format!("Stats:\tprice\t\tdiff_ema\t\tdiff_ema_roc\t\tspread\tema1\tema2\tmin_sell\tmax_buy\n\t{}\t\t{}\t{}\n\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+			self.dtg,
+			self.dtg_last_tick.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.seq_last_tick.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.price.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.diff_ema.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.diff_ema_roc.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.spread.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.ema1.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.ema2.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.min_sell.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
+			self.max_buy.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str()
+		)
+	}*/
+
 }
 
 
