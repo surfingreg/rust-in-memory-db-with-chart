@@ -116,31 +116,46 @@ fn db_log_insert_trade(client:&mut postgres::Client, t: &Trade) {
 			ema1_sell,
 			ema2_sell,
 			diff_sell,
-			diff_roc_sell
+			diff_roc_sell,
+			
+			price_buy_market,
+			price_sell_market,
+			size_mkt_available_to_buy,
+			size_mkt_available_to_sell
+			
+			
 		) values (
 			'{}',{},
 			{},{},
 			{},{},{},
 			{},{},{},{},
-			{},{},{}
+			{},{},{},
+			{},{},{},{}
 		);
 	"#,
-		dtg_now,
-		// &t.id_buy,
+					  dtg_now,
+					  // &t.id_buy,
 		b.sequence,
-		s.sequence,
-		&t.net_ticker,
-		//TODO: need net_ideal vs net_actual, price_buy_actual, price_sell_actual
+					  s.sequence,
+					  &t.net_ticker,
+					  //TODO: need net_ideal vs net_actual, price_buy_actual, price_sell_actual
 		b.price,
-		s.price,
-		b.ema1.unwrap(),
-		b.ema2.unwrap(),
-		b.diff_ema.unwrap(),
-		b.diff_ema_roc.map( | roc_opt |{ format!("{}",roc_opt) }).unwrap_or("null".to_owned()),
-		s.ema1.unwrap(),
-		s.ema2.unwrap(),
-		s.diff_ema.unwrap(),
-		s.diff_ema_roc.map( | roc_opt |{ format!("{}",roc_opt) }).unwrap_or("null".to_owned())
+					  s.price,
+					  b.ema1.unwrap(),
+					  b.ema2.unwrap(),
+					  b.diff_ema.unwrap(),
+					  b.diff_ema_roc.map( | roc_opt |{ format!("{}",roc_opt) }).unwrap_or("null".to_owned()),
+					  s.ema1.unwrap(),
+					  s.ema2.unwrap(),
+					  s.diff_ema.unwrap(),
+					  s.diff_ema_roc.map( | roc_opt |{ format!("{}",roc_opt) }).unwrap_or("null".to_owned()),
+
+					  t.price_mkt_for_buy.map( |roc_opt |{ format!("{}", roc_opt) }).unwrap_or("null".to_owned()),
+					  t.price_mkt_for_sell.map( |roc_opt |{ format!("{}", roc_opt) }).unwrap_or("null".to_owned()),
+					  t.size_mkt_for_buy.map( |roc_opt |{ format!("{}", roc_opt) }).unwrap_or("null".to_owned()),
+					  t.size_mkt_for_sell.map( |roc_opt |{ format!("{}", roc_opt) }).unwrap_or("null".to_owned())
+
+
 	);
 
 	// println!("[db_log_insert_trade] sql: {}", &sql);
@@ -149,9 +164,9 @@ fn db_log_insert_trade(client:&mut postgres::Client, t: &Trade) {
 		for i in result_vec {
 			match i {
 				postgres::SimpleQueryMessage::CommandComplete(x) =>
-					println!("[db_log_insert_trade] {} row inserted", x),
+					log::debug!("[db_log_insert_trade] {} row inserted:\n{:?}\nmkt profit: {}", x, &t, &t.price_mkt_for_sell.unwrap()-&t.price_mkt_for_buy.unwrap()),
 				postgres::SimpleQueryMessage::Row(_row) => {}
-				_ => println!("[db_log_insert_trade] Something weird happened on log query."),
+				_ => log::debug!("[db_log_insert_trade] Something weird happened on log query."),
 			}
 		}
 	} else {

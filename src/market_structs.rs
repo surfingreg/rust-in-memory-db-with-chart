@@ -5,6 +5,7 @@ use crate::ticker::Ticker;
 
 
 
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Stat{
 	pub dtg:DateTime<Utc>,
@@ -145,14 +146,23 @@ pub struct Trade{
 	pub(crate) ticker_buy:Ticker,
 	pub(crate) ticker_sell:Option<Ticker>,
 	pub(crate) net_ticker:Decimal,
-	net_actual:Decimal
+
+	// Market Theoretical
+	// cost to buy/sell based on current book
+	pub price_mkt_for_buy:Option<Decimal>,
+	pub price_mkt_for_sell:Option<Decimal>,
+
+	// amount even available to buy or sell
+	pub size_mkt_for_buy:Option<Decimal>,
+	pub size_mkt_for_sell:Option<Decimal>,
+
+	pub price_net_actual:Decimal,
+
 }
 
 impl Trade{
 
-	pub fn new(	dtg: DateTime<Utc>,
-			   ticker_buy:Ticker,
-	) -> Self{
+	pub fn new(dtg: DateTime<Utc>, ticker_buy:Ticker, mkt_price_for_buy:Option<Decimal>, mkt_size_for_buy:Option<Decimal>) -> Self{
 		Self{
 			dtg: dtg,
 			// id_buy: Uuid::new_v4(),
@@ -160,12 +170,15 @@ impl Trade{
 			ticker_buy:ticker_buy,
 			ticker_sell:None,
 			net_ticker:Decimal::from_u8(0).unwrap(),
-			net_actual:Decimal::from_u8(0).unwrap()
+			price_net_actual:Decimal::from_u8(0).unwrap(),
+			price_mkt_for_buy: mkt_price_for_buy,
+			price_mkt_for_sell:None,
+			size_mkt_for_buy: mkt_size_for_buy,
+			size_mkt_for_sell:None,
 		}
 	}
 
-	pub fn new_with_sell(buy_trade:Trade, ticker_sell:Ticker,
-	) -> Self{
+	pub fn new_with_sell(buy_trade:Trade, ticker_sell:Ticker, mkt_price_for_sell:Option<Decimal>, mkt_size_for_sell:Option<Decimal>) -> Self{
 		Self{
 			dtg: buy_trade.dtg.clone(),
 			// id_buy: buy_trade.id_buy.clone(),
@@ -173,7 +186,11 @@ impl Trade{
 			// id_sell: Some(Uuid::new_v4()),
 			ticker_sell:Some(ticker_sell.clone()),
 			net_ticker:ticker_sell.price - &buy_trade.ticker_buy.price,
-			net_actual:Decimal::from_u8(0).unwrap()
+			price_net_actual:Decimal::from_u8(0).unwrap(),
+			price_mkt_for_buy:buy_trade.price_mkt_for_buy,
+			price_mkt_for_sell:mkt_price_for_sell,
+			size_mkt_for_buy:buy_trade.size_mkt_for_buy,
+			size_mkt_for_sell:mkt_size_for_sell,
 		}
 	}
 }

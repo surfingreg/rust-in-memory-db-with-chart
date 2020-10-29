@@ -125,7 +125,7 @@ impl Market{
 								Some("ticker") => {
 
 									// json to ticker
-									log::debug!("[ws] ticker"); /* {}", &ws_type.unwrap());*/
+									// log::debug!("[ws] ticker"); /* {}", &ws_type.unwrap());*/
 									// use as_str() to remove the quotation marks
 									let ticker:Option<TickerJson> = serde_json::from_value(json_val).expect("[ticker_actor] json conversion to Ticker 2 didn't work"); // unwrap_or(None);
 
@@ -215,21 +215,42 @@ impl Market{
 		// Get trade recommendation
 		if ticker_previous.is_some() {
 
-			let recommendation:TradeRec = recommend_zero_diff_ema_trade(&ticker_current, &ticker_previous.unwrap());
+			// ****** Algorithm Selection *****
+
+			// let recommendation:TradeRec = recommend_zero_diff_ema_trade(&ticker_current, &ticker_previous.unwrap());
+			let recommendation:TradeRec = recommend_zero_diff_ema_trade_accept_no_loss(&ticker_current, &ticker_previous.unwrap());
 
 			// Perform trade based on recommendation
+			// *****************
+			//let TRADE_SIZE_TARGET:Decimal = Decimal::from_f32(0.1).unwrap();
+			let trade_size_target:Decimal = Decimal::from_str(std::env::var("TRADE_SIZE_TARGET").unwrap_or("1.0".to_owned()).as_str()).unwrap();
+			// **************
+
+
 			match recommendation {
+
 				TradeRec::Buy => {
-					// "What's the market for a buyer?"
-					self.get_sell_offers_at_my_buy_price((&ticker_current).price, Decimal::from_f64(1.0).unwrap());
 
 					// perform_trade
 					if self.buy_trade_unmatched == None {
 
 						// BUY (only if not already in a buy status)
 
+						// "What's the market for a buyer?"
+						//let (mkt_price, mkt_size) = self.get_sell_offers_at_my_buy_price((&ticker_current).price, Decimal::from_f64(1.0).unwrap());
+						let market = self.get_sell_offers_at_my_buy_price((&ticker_current).price, trade_size_target);
+
+						// log::debug!("[process_ticker] buy market: {:?}", &market);
+
 						// Create an outstanding BUY trade
-						let buy_trade: Trade = Trade::new(Utc::now(), (&ticker_current).clone());
+						let buy_trade = Trade::new(Utc::now(), (&ticker_current).clone(), Some(market.0), Some(market.1));
+						// buy_trade.price_mkt_for_buy = Some(market.0);
+						// buy_trade.size_mkt_for_buy = Some(market.1);
+
+
+
+
+						//log::debug!("[process_ticker:Buy] buy trade: {:?}", &buy_trade);
 
 
 
@@ -239,20 +260,11 @@ impl Market{
 
 						&self.trades.insert((&buy_trade).ticker_buy.sequence, buy_trade.clone());
 
-
-
-
-
-
 						// Save the unmatched buy half of the trade for match with a follow-on sell
 						// TODO: probably don't need clone here, use it up
 						self.buy_trade_unmatched = Some(buy_trade.clone());
 
-
-
 						// TODO: save the unmatched buy to the database!!!
-
-
 
 					} /*else {
 						// don't do anything if in buy status
@@ -261,39 +273,42 @@ impl Market{
 				},
 				TradeRec::Sell => {
 
-					// "What's the market for a seller?"
-					self.get_buy_bids_at_my_sell_price((&ticker_current).price, Decimal::from_f64(1.0).unwrap());
 
 					// Sell
 					// ...if there exists a previously unmatched buy
 					if self.buy_trade_unmatched != None {
 
-						let matched_trade = Trade::new_with_sell(self.buy_trade_unmatched.as_ref().unwrap().to_owned(), (&ticker_current).clone() );
+						// "What's the market for a seller?"
+						// Get market price and size available to buy, up to 1.0 BTC
+						let market = self.get_buy_bids_at_my_sell_price((&ticker_current).price, trade_size_target);
 
 
 
+						// TODO: !!!!!!!!!! ALGO HACK follows
+						// prevent trade if market sell price is lower than what we bought at
+						// Continue only if what we can sell at is higher than what we paid
+						if(market.0 > self.buy_trade_unmatched.as_ref().unwrap().price_mkt_for_buy.unwrap()){
 
 
 
-						// insert full trade into trades buffer
-						self.trades.insert((&matched_trade).ticker_buy.sequence, matched_trade.clone());
+							// New Trade: Match this new sell to the existing buy
+							let matched_trade = Trade::new_with_sell(self.buy_trade_unmatched.as_ref().unwrap().to_owned(), (&ticker_current).clone(), Some(market.0), Some(market.1) );
 
+							// log::debug!("[process_ticker:Sell] matched trade: {:?}", &matched_trade);
 
+							// // Add the sell market price/size to the new Trade
+							// matched_trade.price_mkt_for_sell = Some(mkt_price);
+							// matched_trade.size_mkt_for_sell = Some(mkt_size);
 
+							// insert full trade into trades buffer
+							self.trades.insert((&matched_trade).ticker_buy.sequence, matched_trade.clone());
 
-						// Send cross-thread to db via crossbeam channel
-						let _ = self.tx.send(Msg::Trade(matched_trade.clone()));
+							// Send cross-thread to db via crossbeam channel
+							let _ = self.tx.send(Msg::Trade(matched_trade.clone()));
 
-
-
-
-
-
-
-
-						// self.print_trades();
-						self.buy_trade_unmatched = None;
-
+							// self.print_trades();
+							self.buy_trade_unmatched = None;
+						}
 					} else {
 						// don't do anything if status isn't "buy"
 					}
@@ -368,9 +383,9 @@ impl Market{
 			}
 		}
 
-		println!("[get_buy_bids_at_my_sell_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
-		println!("[get_buy_bids_at_my_sell_price] total cost: {}, for available size: {}", market_bid_cost, (my_size - size_still_needed));
-		println!("[get_buy_bids_at_my_sell_price] market bid is ${} less than my desired sell price", market_bid_cost -my_price);
+		// println!("[get_buy_bids_at_my_sell_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
+		// println!("[get_buy_bids_at_my_sell_price] available profit: {}, for available size: {}", market_bid_cost, (my_size - size_still_needed));
+		// println!("[get_buy_bids_at_my_sell_price] market bid is ${} less than my desired sell price", market_bid_cost -my_price);
 
 		(market_bid_cost, (my_size - size_still_needed))
 	}
@@ -415,12 +430,14 @@ impl Market{
 			}
 		}
 
-		println!("[get_sell_offers_at_my_buy_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
-		println!("[get_sell_offers_at_my_buy_price] total cost: {}, for available size: {}", market_cost, (my_size - size_still_needed));
-		println!("[get_sell_offers_at_my_buy_price] market cost is ${} more than my desired price", market_cost-my_price);
+		let result = (market_cost, (my_size - size_still_needed));
 
-		(market_cost, (my_size - size_still_needed))
+		// println!("[get_sell_offers_at_my_buy_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
+		// println!("[get_sell_offers_at_my_buy_price] total cost: {}, for available size: {}", (&result).0, (&result).1);
+		// println!("[get_sell_offers_at_my_buy_price] market cost is ${} more than my desired price", market_cost-my_price);
 
+
+		result
 	}
 
 
