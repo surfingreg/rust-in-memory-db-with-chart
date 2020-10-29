@@ -10,9 +10,11 @@ use std::collections::BTreeMap;
 use crate::market_structs::{*};
 use crate::ticker::{Ticker as TickerJson} ;
 use rust_decimal::prelude::*;
-use std::thread::JoinHandle;
 use tungstenite::{Message};
 use url::Url;
+use crate::algorithm::*;
+use crate::db::Msg;
+use chrono::{Utc};
 
 pub struct Market{
 
@@ -29,6 +31,10 @@ pub struct Market{
 
 	stats:Vec<Stat>,
 
+	trades: BTreeMap<u64 ,Trade>,
+
+	buy_trade_unmatched: Option<Trade>,
+
 }
 
 impl Market{
@@ -40,6 +46,8 @@ impl Market{
 			book_buy : BTreeMap::new(),
 			tx : tx,
 			stats: vec![],
+			trades : BTreeMap::new(),
+			buy_trade_unmatched : None,
 		}
 	}
 
@@ -60,8 +68,8 @@ impl Market{
 		// Start Database
 		handles.push(std::thread::spawn(move ||->(){
 			let db_log_url = std::env::var("COIN_TRADE_LOG_DB_URL").expect("COIN_TRADE_LOG_DB_URL not found");
-			if let Some(mut client) = Market::db_connect(&db_log_url){
-				Market::db_thread(&mut client, rx);
+			if let Some(mut client) = crate::db::db_connect(&db_log_url){
+				crate::db::db_thread(&mut client, rx);
 			};
 		}));
 
@@ -79,7 +87,7 @@ impl Market{
 		log::info!("[websocket_go] websocket connected, response: {:?}", response);
 
 		// subscribe to coinbase socket for heartbeat and tickers
-		let _ = ws.write_message(Message::Text(Market::json_ws_subscribe().to_string()));
+		let _ = ws.write_message(Message::Text(Market::generate_websocket_subscribe_json().to_string()));
 
 		// parse incoming messages
 		loop {
@@ -185,79 +193,235 @@ impl Market{
 		}
 	}
 
-	fn process_ticker(&mut self, mut t:TickerJson) {
+	fn process_ticker(&mut self, mut ticker_current:TickerJson) {
 
 		// calculate emas
-		self.update_ticker_calcs(&mut t);
+		self.update_ticker_calcs(&mut ticker_current);
 
-		// insert to tickers
-		self.tickers.insert((&t).sequence, (&t).clone());
+		// get the max/most recent ticker before insert the new one
+		// TODO: sequence numbers could come in unordered; change this to pop the max 2 after insert
+		let ticker_previous:Option<TickerJson> = if self.tickers.len() > 0 {
+			Some(self.tickers.last_key_value().unwrap().1.clone())
+		}else {
+			None
+		};
 
-		// print all market stats
-		&self.send_stat();
+		// insert the new ticker (it's the new max presumably)
+		self.tickers.insert((&ticker_current).sequence, (&ticker_current).clone());
 
-		// TODO: get trade recommendation firsts
-		self.get_buy_bids_at_my_sell_price((&t).price, Decimal::from_f64(1.0).unwrap());
-		self.get_sell_offers_at_my_buy_price((&t).price, Decimal::from_f64(1.0).unwrap());
+		// statistic based on this latest ticker
+		&self.save_stat();
 
+		// Get trade recommendation
+		if ticker_previous.is_some() {
+
+			let recommendation:TradeRec = recommend_zero_diff_ema_trade(&ticker_current, &ticker_previous.unwrap());
+
+			// Perform trade based on recommendation
+			match recommendation {
+				TradeRec::Buy => {
+					// "What's the market for a buyer?"
+					self.get_sell_offers_at_my_buy_price((&ticker_current).price, Decimal::from_f64(1.0).unwrap());
+
+					// perform_trade
+					if self.buy_trade_unmatched == None {
+
+						// BUY (only if not already in a buy status)
+
+						// Create an outstanding BUY trade
+						let buy_trade: Trade = Trade::new(Utc::now(), (&ticker_current).clone());
+
+
+
+
+
+
+
+						&self.trades.insert((&buy_trade).ticker_buy.sequence, buy_trade.clone());
+
+
+
+
+
+
+						// Save the unmatched buy half of the trade for match with a follow-on sell
+						// TODO: probably don't need clone here, use it up
+						self.buy_trade_unmatched = Some(buy_trade.clone());
+
+
+
+						// TODO: save the unmatched buy to the database!!!
+
+
+
+					} /*else {
+						// don't do anything if in buy status
+					}*/
+
+				},
+				TradeRec::Sell => {
+
+					// "What's the market for a seller?"
+					self.get_buy_bids_at_my_sell_price((&ticker_current).price, Decimal::from_f64(1.0).unwrap());
+
+					// Sell
+					// ...if there exists a previously unmatched buy
+					if self.buy_trade_unmatched != None {
+
+						let matched_trade = Trade::new_with_sell(self.buy_trade_unmatched.as_ref().unwrap().to_owned(), (&ticker_current).clone() );
+
+
+
+
+
+
+						// insert full trade into trades buffer
+						self.trades.insert((&matched_trade).ticker_buy.sequence, matched_trade.clone());
+
+
+
+
+						// Send cross-thread to db via crossbeam channel
+						let _ = self.tx.send(Msg::Trade(matched_trade.clone()));
+
+
+
+
+
+
+
+
+						// self.print_trades();
+						self.buy_trade_unmatched = None;
+
+					} else {
+						// don't do anything if status isn't "buy"
+					}
+				}
+				TradeRec::Hold => {
+					// do nothing
+				}
+			}
+		}
 	}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 	/// I want to sell X.0 BTC at $Y.YY. What are the bids out there that would match my offer and quantity?
 	/// Get the highest buy offers until my quantity is fill.
-	fn get_buy_bids_at_my_sell_price(&self, my_price:Decimal, my_size:Decimal)/*-> Vec<Bid>*/{
+	fn get_buy_bids_at_my_sell_price(&self, my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal) {
 
 		let mut matching_bids = vec![];
 		let mut total_size = Decimal::from_u8(0).unwrap();
+
+		let mut size_still_needed = my_size;
+		let mut market_bid_cost = Decimal::from_u8(0).unwrap();
 
 		// get all the bids to buy up to the quantity I want to sell
 		// I want to sell 1.0 at $13000. So bids will probably be
 		// -- 0.5 at 12999 and 0.5 at 12998
 		// reverse() since we want the largest
-		for (k_price,v_size) in self.book_buy.iter().rev() {
-			matching_bids.push((k_price.clone(),v_size.clone()));
-			total_size += v_size;
+		for (k_price, size_available) in self.book_buy.iter().rev() {
+
+			// TODO: if book_buy size is zero, return sale not possible, don't calculate
+
+
+
+			// Calculate how much it'll cost to buy my_size at current market condition
+			//0: take 0.6 = I need 1.0, there's 0.6 available. min (1.0, 0.6)
+			//1. take 0.4 = I need 0.4 more, there's 0.6 available.
+			let take = std::cmp::min(size_still_needed, *size_available);
+			// println!("[get_buy_offers_at_my_sell_price] take: {}", take);
+			// 0: 0.4 = 1.0 - 0.6
+			size_still_needed = size_still_needed - take;
+			// println!("[get_sell_offers_at_my_buy_price] size_still_needed: {}", size_still_needed);
+			// how much 'size' do we need from this price point? as much as we can get up to the amount we want
+			market_bid_cost = market_bid_cost + take * k_price;
+
+
+
+
+
+
+
+
+
+
+			// running list of offers to sell that'd fill my market order;
+			// not totally needed except for printing
+			// TODO: consider if the market is ~2x the order I need, gamble that what if someone gets there first, what's the worst case?
+			matching_bids.push((k_price.clone(), size_available.clone()));
+			total_size += size_available;
 			if total_size >= my_size{
 				break;
 			}
 		}
 
-		println!("[get_buy_bids_at_my_sell_price] price: {}, size: {} => {:?}", my_price, my_size, matching_bids);
+		println!("[get_buy_bids_at_my_sell_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
+		println!("[get_buy_bids_at_my_sell_price] total cost: {}, for available size: {}", market_bid_cost, (my_size - size_still_needed));
+		println!("[get_buy_bids_at_my_sell_price] market bid is ${} less than my desired sell price", market_bid_cost -my_price);
 
+		(market_bid_cost, (my_size - size_still_needed))
 	}
 
 	/// I want to buy X.0 BTC at $Y.YY. What are the lowest sell offers out there that would match my offer and quantity?
 	/// Get the highest buy offers until my quantity is fill.
-	fn get_sell_offers_at_my_buy_price(&self, my_price:Decimal, my_size:Decimal)/*-> Vec<Bid>*/{
+	/// Return (price,size) available to buy based on the cheapest currently offered
+	fn get_sell_offers_at_my_buy_price(&self, my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal){
 
 		let mut matching_bids = vec![];
+		let mut size_still_needed = my_size;
+		let mut market_cost = Decimal::from_u8(0).unwrap();
 		let mut total_size = Decimal::from_u8(0).unwrap();
 
 		// get all the bids to buy up to the quantity I want to sell
 		// I want to sell 1.0 at $13000. So bids will probably be
 		// -- 0.5 at 12999 and 0.5 at 12998
 		// don't need to reverse for sell offers since we want the smallest
-		for (k_price,v_size) in self.book_sell.iter() {
+		for (k_price, size_available) in self.book_sell.iter() {
 
-			matching_bids.push((k_price.clone(),v_size.clone()));
-			total_size += v_size;
+			// Calculate how much it'll cost to buy my_size at current market condition
+			// Example: I want 1.0 BTC but there's only 0.5 available at this price
+			// available 0.6 at $x
+			// available: 0.6 at $y (only need 0.4)
+			//0: take 0.6 = I need 1.0, there's 0.6 available. min (1.0, 0.6)
+			//1. take 0.4 = I need 0.4 more, there's 0.6 available.
+			let take = std::cmp::min(size_still_needed, *size_available);
+			// println!("[get_sell_offers_at_my_buy_price] take: {}", take);
+			// 0: 0.4 = 1.0 - 0.6
+			size_still_needed = size_still_needed - take;
+			// println!("[get_sell_offers_at_my_buy_price] size_still_needed: {}", size_still_needed);
+			// how much 'size' do we need from this price point? as much as we can get up to the amount we want
+			market_cost = market_cost + take * k_price;
+
+			// running list of offers to sell that'd fill my market order;
+			// not totally needed except for printing
+			// TODO: consider if the market is ~2x the order I need, gamble that what if someone gets there first, what's the worst case?
+			matching_bids.push((k_price.clone(), size_available.clone()));
+			total_size += size_available;
 			if total_size >= my_size{
 				break;
 			}
 		}
 
-		println!("[get_sell_offers_at_my_buy_price] price: {}, size: {} => {:?}", my_price, my_size, matching_bids);
+		println!("[get_sell_offers_at_my_buy_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
+		println!("[get_sell_offers_at_my_buy_price] total cost: {}, for available size: {}", market_cost, (my_size - size_still_needed));
+		println!("[get_sell_offers_at_my_buy_price] market cost is ${} more than my desired price", market_cost-my_price);
+
+		(market_cost, (my_size - size_still_needed))
 
 	}
-
-
-
-
-
-
-
-
 
 
 	fn process_book_update(&mut self, changes:Vec<Change>){
@@ -292,7 +456,7 @@ impl Market{
 			}
 
 			// print stats on every entry
-			&self.send_stat();
+			&self.save_stat();
 		}
 	}
 
@@ -333,21 +497,21 @@ impl Market{
 	/// Send the latest stat to the database
 	/// Originally this printed the latest stat, potentially very inefficient, maybe send 1000 at a time?
 	/// or send a ref to the stat map
-	fn send_stat(&mut self) {
+	fn save_stat(&mut self) {
 		if let Some(st) = self.build_stat_from_latest_ticker_and_book(){
 
-			//let _ = self.tx.send(Msg::Statistic(st.clone()));
-
+			// save stat to memory
 			self.stats.push(st);
 
+			// save stat to the database
 			if self.stats.len() > 999 {
+				// clean out the stats vector and push to the database
 				let _ = self.tx.send(Msg::StatVector(self.stats.drain(..).collect()));
 			};
-
 		};
 	}
 
-	fn json_ws_subscribe() -> serde_json::Value {
+	fn generate_websocket_subscribe_json() -> serde_json::Value {
 		let cb_sub = Subscribe{
 			typ:"subscribe".to_owned(),
 			product_ids:vec!["BTC-USD".to_owned()],
@@ -360,7 +524,7 @@ impl Market{
 	
 	}
 
-	// TODO: not so functional, causes an effect
+	// TODO: not so "functional", causes an effect
 	fn update_ticker_calcs(&self, t: &mut TickerJson) {
 
 		t.ema1 = self.compute_moving_average(5, t.price);
@@ -421,86 +585,5 @@ impl Market{
 		}
 	}
 
-	/// Listen on a different thread for messages to persist to postgresql
-	/// Each db network call takes 150-300ms on LAN/wifi
-	pub fn db_thread(client: &mut postgres::Client,rcv:crossbeam::channel::Receiver<Msg>)-> JoinHandle<()>{
-		loop {
-			// this has the capacity to receive different messages from different transmitters, overkill right now
-			crossbeam::channel::select!{
-				recv(rcv) -> result => {
-					if let Ok(msg) = &result {
-						match msg {
-/*							Msg::Statistic(stat) => {
-								&stat.print();
-							},
-*/							Msg::StatVector(v) => {
-								// for stat in v {
-								// 	&stat.print();
-								// };
-
-								Market::stats_to_db(client, &v);
-
-							},
-							// _ => {},
-						}
-						// log::debug!("[db_thread] {}", &result_str);
-					}
-				}
-			}
-		}
-	}
-
-	/// Insert up to 1000 Stats in one network/database call
-	fn stats_to_db(client:&mut postgres::Client , vec_stat:&Vec<Stat>){
-
-		let start = std::time::Instant::now();
-
-		// let mut sql = r#"insert
-		// 	into t_stat (dtg, dtg_last_tick, price, diff_ema, diff_ema_roc, spread, ema1, ema2, min_sell, max_buy)
-		// 	values ('2020-10-27 21:37:20.488852 UTC', '2020-10-27 21:37:20.488852 UTC', 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0);"#;
-
-		let insert = r#"insert into t_stat (dtg, dtg_last_tick, seq_last_tick, price, diff_ema, diff_ema_roc, spread, ema1, ema2, min_sell, max_buy) values"#;
-		let mut sql = format!("{}", insert);
-
-		for st in vec_stat {
-
-			sql = format!("{} ('{}', '{}', {}, {}, {}, {}, {}, {}, {}, {}, {} ), ", sql,
-				st.dtg,
-				st.dtg_last_tick.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.seq_last_tick.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.price.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.diff_ema.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.diff_ema_roc.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.spread.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.ema1.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.ema2.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.min_sell.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str(),
-				st.max_buy.map(|o| { format!("{}", o)}).unwrap_or("null".to_owned()).as_str()
-			);
-		}
-		sql.pop();
-		sql.pop();
-		sql = format!("{};", &sql);
-
-		println!("[stats_to_db] insert: {}, elapsed: {:?}", &vec_stat.len(), start.elapsed());
-
-		let _ = client.simple_query(&sql);
-
-	}
-
-	pub fn db_connect(db_url:&str) -> Option<postgres::Client> {
-		println!("[db_connect]");
-		let client_result = postgres::Client::connect(&db_url, postgres::NoTls);
-		match client_result {
-			Err(e) 	=> {
-				println!("[db_connect] postgresql connection failed: {}", &e);
-				None
-			},
-			Ok(client) 	=> {
-				println!("[db_connect] Connected to postgresql");
-				Some(client)
-			}
-		}
-	}
 
 }

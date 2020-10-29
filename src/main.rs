@@ -5,6 +5,8 @@
 mod market;
 mod market_structs;
 mod ticker;
+mod algorithm;
+mod db;
 
 fn main() {
 

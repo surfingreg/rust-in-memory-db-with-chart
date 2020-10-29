@@ -1,14 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use rust_decimal::prelude::*;
+use crate::ticker::Ticker;
 
 
-#[derive(Debug)]
-pub enum Msg{
-	// Statistic(Stat),
-	StatVector(Vec<Stat>),
-
-}
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Stat{
@@ -140,4 +135,45 @@ pub struct Subscribe {
 	pub typ : String,
 	pub product_ids : Vec<String>,
 	pub channels : Vec<String>
+}
+
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Clone)]
+pub struct Trade{
+	pub(crate) dtg: DateTime<Utc>,
+	// id_buy: Uuid,
+	// id_sell: Option<Uuid>,
+	pub(crate) ticker_buy:Ticker,
+	pub(crate) ticker_sell:Option<Ticker>,
+	pub(crate) net_ticker:Decimal,
+	net_actual:Decimal
+}
+
+impl Trade{
+
+	pub fn new(	dtg: DateTime<Utc>,
+			   ticker_buy:Ticker,
+	) -> Self{
+		Self{
+			dtg: dtg,
+			// id_buy: Uuid::new_v4(),
+			// id_sell: None,
+			ticker_buy:ticker_buy,
+			ticker_sell:None,
+			net_ticker:Decimal::from_u8(0).unwrap(),
+			net_actual:Decimal::from_u8(0).unwrap()
+		}
+	}
+
+	pub fn new_with_sell(buy_trade:Trade, ticker_sell:Ticker,
+	) -> Self{
+		Self{
+			dtg: buy_trade.dtg.clone(),
+			// id_buy: buy_trade.id_buy.clone(),
+			ticker_buy:buy_trade.ticker_buy.clone(),
+			// id_sell: Some(Uuid::new_v4()),
+			ticker_sell:Some(ticker_sell.clone()),
+			net_ticker:ticker_sell.price - &buy_trade.ticker_buy.price,
+			net_actual:Decimal::from_u8(0).unwrap()
+		}
+	}
 }
