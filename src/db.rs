@@ -25,7 +25,7 @@ pub fn db_thread(client: &mut postgres::Client,rcv:crossbeam::channel::Receiver<
 				if let Ok(msg) = &result {
 					match msg {
 						Msg::StatVector(v) => {
-							db_insert_stats(client, &v);
+							// db_insert_stats(client, &v);
 						},
 						Msg::Trade(trade) => {
 
