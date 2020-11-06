@@ -287,7 +287,7 @@ impl Market{
 						// TODO: !!!!!!!!!! ALGO HACK follows
 						// prevent trade if market sell price is lower than what we bought at
 						// Continue only if what we can sell at is higher than what we paid
-						if(market.0 > self.buy_trade_unmatched.as_ref().unwrap().price_mkt_for_buy.unwrap()){
+//						if(market.0 > self.buy_trade_unmatched.as_ref().unwrap().price_mkt_for_buy.unwrap()){
 
 
 
@@ -308,7 +308,7 @@ impl Market{
 
 							// self.print_trades();
 							self.buy_trade_unmatched = None;
-						}
+//						}
 					} else {
 						// don't do anything if status isn't "buy"
 					}

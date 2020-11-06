@@ -7,6 +7,8 @@
 FROM rust:latest
 RUN /bin/bash -c 'apt-get update'
 RUN /bin/bash -c 'apt-get -y upgrade'
+RUN rustup toolchain install nightly
+RUN rustup default nightly
 WORKDIR /usr/src/market_watcher
 COPY . .
 RUN mkdir /var/log/market_watcher
