@@ -4,8 +4,6 @@
 FROM rust:latest
 RUN /bin/bash -c 'apt-get update'
 RUN /bin/bash -c 'apt-get -y upgrade'
-RUN rustup toolchain install nightly
-RUN rustup default nightly
 
 # nightly
 RUN rustup toolchain install nightly
