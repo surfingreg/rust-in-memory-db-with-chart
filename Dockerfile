@@ -1,17 +1,17 @@
 
-
 # docker build -t market_watcher .
-
-
 
 FROM rust:latest
 RUN /bin/bash -c 'apt-get update'
 RUN /bin/bash -c 'apt-get -y upgrade'
+<<<<<<< HEAD
+RUN rustup toolchain install nightly
+RUN rustup default nightly
+=======
 
 # nightly
 RUN rustup toolchain install nightly
 RUN rustup default nightly
-
 WORKDIR /usr/src/market_watcher
 COPY . .
 RUN mkdir /var/log/market_watcher
