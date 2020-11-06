@@ -135,6 +135,7 @@ impl Market{
 
 									}
 								},
+
 								Some("l2update") => {
 
 									// parse json
@@ -154,7 +155,6 @@ impl Market{
 
 									// log::debug!("[ws] snapshot: {:?}", json_val);
 
-
 									let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
 									// log::debug!("[ws] snapshot: {:?}", snapshot_opt);
 
@@ -173,11 +173,7 @@ impl Market{
 											&self.book_sell.insert(sell.price.clone(), sell.size.clone());
 
 										}
-
 									}
-
-
-
 								},
 								_ => {
 									log::debug!("[ws] unknown type: {:?}", json_val);
@@ -200,6 +196,7 @@ impl Market{
 
 		// get the max/most recent ticker before insert the new one
 		// TODO: sequence numbers could come in unordered; change this to pop the max 2 after insert
+
 		let ticker_previous:Option<TickerJson> = if self.tickers.len() > 0 {
 			Some(self.tickers.last_key_value().unwrap().1.clone())
 		}else {
@@ -217,13 +214,22 @@ impl Market{
 
 			// ****** Algorithm Selection *****
 
-			// let recommendation:TradeRec = recommend_zero_diff_ema_trade(&ticker_current, &ticker_previous.unwrap());
-			let recommendation:TradeRec = recommend_zero_diff_ema_trade_accept_no_loss(&ticker_current, &ticker_previous.unwrap());
+			let allow_losing_sale:bool = bool::from_str(std::env::var("ALLOW_LOSING_SALE").unwrap_or("false".to_owned()).as_str()).unwrap_or(false);
+			let recommendation:TradeRec = if allow_losing_sale {
+
+				// use algo that allows loss
+				recommend_zero_diff_ema_trade(&ticker_current, &ticker_previous.unwrap())
+			}else{
+
+				// do not allow loss
+				recommend_zero_diff_ema_trade_accept_no_loss(&ticker_current, &ticker_previous.unwrap())
+
+			};
 
 			// Perform trade based on recommendation
 			// *****************
 			//let TRADE_SIZE_TARGET:Decimal = Decimal::from_f32(0.1).unwrap();
-			let trade_size_target:Decimal = Decimal::from_str(std::env::var("TRADE_SIZE_TARGET").unwrap_or("1.0".to_owned()).as_str()).unwrap();
+			let trade_size_target:Decimal = Decimal::from_str(std::env::var("TRADE_SIZE_TARGET").unwrap_or("0.001".to_owned()).as_str()).unwrap();
 			// **************
 
 
@@ -244,24 +250,12 @@ impl Market{
 
 						// Create an outstanding BUY trade
 						let buy_trade = Trade::new(Utc::now(), (&ticker_current).clone(), Some(market.0), Some(market.1));
-						// buy_trade.price_mkt_for_buy = Some(market.0);
-						// buy_trade.size_mkt_for_buy = Some(market.1);
 
-
-
-
-						//log::debug!("[process_ticker:Buy] buy trade: {:?}", &buy_trade);
-
-
-
-
-
-
+						log::info!("[process_ticker:Buy] buy trade: {:?}", &buy_trade);
 
 						&self.trades.insert((&buy_trade).ticker_buy.sequence, buy_trade.clone());
 
 						// Save the unmatched buy half of the trade for match with a follow-on sell
-						// TODO: probably don't need clone here, use it up
 						self.buy_trade_unmatched = Some(buy_trade.clone());
 
 						// TODO: save the unmatched buy to the database!!!
@@ -278,39 +272,26 @@ impl Market{
 					// ...if there exists a previously unmatched buy
 					if self.buy_trade_unmatched != None {
 
+						log::debug!("[process_ticker:TradeRec::Sell] previous buy exists, matching...\n{:?}", &(self.buy_trade_unmatched));
+
 						// "What's the market for a seller?"
 						// Get market price and size available to buy, up to 1.0 BTC
 						let market = self.get_buy_bids_at_my_sell_price((&ticker_current).price, trade_size_target);
 
+						// New Trade: Match this new sell to the existing buy
+						let matched_trade = Trade::new_with_sell(self.buy_trade_unmatched.as_ref().unwrap().to_owned(), (&ticker_current).clone(), Some(market.0), Some(market.1) );
 
+						// insert full trade into trades buffer
+						self.trades.insert((&matched_trade).ticker_buy.sequence, matched_trade.clone());
 
-						// TODO: !!!!!!!!!! ALGO HACK follows
-						// prevent trade if market sell price is lower than what we bought at
-						// Continue only if what we can sell at is higher than what we paid
-						if(market.0 > self.buy_trade_unmatched.as_ref().unwrap().price_mkt_for_buy.unwrap()){
+						// Send cross-thread to db via crossbeam channel
+						let _ = self.tx.send(Msg::Trade(matched_trade.clone()));
 
+						// self.print_trades();
+						self.buy_trade_unmatched = None;
 
-
-							// New Trade: Match this new sell to the existing buy
-							let matched_trade = Trade::new_with_sell(self.buy_trade_unmatched.as_ref().unwrap().to_owned(), (&ticker_current).clone(), Some(market.0), Some(market.1) );
-
-							// log::debug!("[process_ticker:Sell] matched trade: {:?}", &matched_trade);
-
-							// // Add the sell market price/size to the new Trade
-							// matched_trade.price_mkt_for_sell = Some(mkt_price);
-							// matched_trade.size_mkt_for_sell = Some(mkt_size);
-
-							// insert full trade into trades buffer
-							self.trades.insert((&matched_trade).ticker_buy.sequence, matched_trade.clone());
-
-							// Send cross-thread to db via crossbeam channel
-							let _ = self.tx.send(Msg::Trade(matched_trade.clone()));
-
-							// self.print_trades();
-							self.buy_trade_unmatched = None;
-						}
 					} else {
-						// don't do anything if status isn't "buy"
+						log::debug!("[process_ticker:TradeRec::Sell] no previous buy exists")
 					}
 				}
 				TradeRec::Hold => {
@@ -335,7 +316,7 @@ impl Market{
 
 	/// I want to sell X.0 BTC at $Y.YY. What are the bids out there that would match my offer and quantity?
 	/// Get the highest buy offers until my quantity is fill.
-	fn get_buy_bids_at_my_sell_price(&self, my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal) {
+	fn get_buy_bids_at_my_sell_price(&self, _my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal) {
 
 		let mut matching_bids = vec![];
 		let mut total_size = Decimal::from_u8(0).unwrap();
@@ -393,7 +374,7 @@ impl Market{
 	/// I want to buy X.0 BTC at $Y.YY. What are the lowest sell offers out there that would match my offer and quantity?
 	/// Get the highest buy offers until my quantity is fill.
 	/// Return (price,size) available to buy based on the cheapest currently offered
-	fn get_sell_offers_at_my_buy_price(&self, my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal){
+	fn get_sell_offers_at_my_buy_price(&self, _my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal){
 
 		let mut matching_bids = vec![];
 		let mut size_still_needed = my_size;
@@ -601,6 +582,4 @@ impl Market{
 			}
 		}
 	}
-
-
 }

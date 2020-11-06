@@ -61,20 +61,24 @@ pub fn recommend_zero_diff_ema_trade_accept_no_loss(t0: &Ticker, t1: &Ticker) ->
 	let zero = Decimal::from_u8(0).unwrap();
 
 	let result = if let (Some(diff0), Some(diff1)) = (t0.diff_ema, t1.diff_ema) {
+
 		if diff0 > zero && diff1 <= zero {
-			// current ema diff is positive and was previously negative, so they crossed
+
+			// current ema diff is positive and was previously negative, (crossed going positive)
 			// println!("[get_algo01_recommendation] BUY");
 			// Some("buy".to_owned())
 			TradeRec::Buy
-		} else if (t0.price > t1.price) && diff0 <= zero && diff1 > zero {
+
+		} else if
 
 			// sell price has to be higher than what we paid
+			(t0.price > t1.price)
+			&&
 			// current ema diff is negative and was previously positive, so they crossed
-			// println!("[get_algo01_recommendation] SELL");
-			// Some("sell".to_owned())
-
+			diff0 <= zero && diff1 > zero {
 
 			TradeRec::Sell
+
 		} else {
 			// None
 			TradeRec::Hold

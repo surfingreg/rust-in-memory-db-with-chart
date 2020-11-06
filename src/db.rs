@@ -3,7 +3,7 @@
 
 use crate::market_structs::{Stat, Trade};
 use std::thread::JoinHandle;
-use chrono::{DateTime, Utc};
+use chrono::{Utc};
 
 
 
@@ -24,12 +24,14 @@ pub fn db_thread(client: &mut postgres::Client,rcv:crossbeam::channel::Receiver<
 			recv(rcv) -> result => {
 				if let Ok(msg) = &result {
 					match msg {
-						Msg::StatVector(v) => {
+						Msg::StatVector(_v) => {
 							// db_insert_stats(client, &v);
 						},
 						Msg::Trade(trade) => {
 
+							log::debug!("[db::db_thread Msg::Trade]");
 							db_log_insert_trade(client, &trade)
+
 						}
 					}
 				}
@@ -39,7 +41,7 @@ pub fn db_thread(client: &mut postgres::Client,rcv:crossbeam::channel::Receiver<
 }
 
 /// Insert up to 1000 Stats in one network/database call
-fn db_insert_stats(client:&mut postgres::Client, vec_stat:&Vec<Stat>){
+/*fn db_insert_stats(client:&mut postgres::Client, vec_stat:&Vec<Stat>){
 
 	let start = std::time::Instant::now();
 
@@ -74,7 +76,7 @@ fn db_insert_stats(client:&mut postgres::Client, vec_stat:&Vec<Stat>){
 
 	let _ = client.simple_query(&sql);
 
-}
+}*/
 
 pub fn db_connect(db_url:&str) -> Option<postgres::Client> {
 	println!("[db_connect]");
@@ -158,13 +160,13 @@ fn db_log_insert_trade(client:&mut postgres::Client, t: &Trade) {
 
 	);
 
-	// println!("[db_log_insert_trade] sql: {}", &sql);
+	log::debug!("[db_log_insert_trade] sql: {}", &sql);
 
 	if let Ok(result_vec) = client.simple_query(&sql) {
 		for i in result_vec {
 			match i {
 				postgres::SimpleQueryMessage::CommandComplete(x) =>
-					log::debug!("[db_log_insert_trade] {} row inserted:\n{:?}\nmkt profit: {}", x, &t, &t.price_mkt_for_sell.unwrap()-&t.price_mkt_for_buy.unwrap()),
+					log::info!("[db_log_insert_trade] {} row inserted:\n{:?}\nmkt profit: {}", x, &t, &t.price_mkt_for_sell.unwrap()-&t.price_mkt_for_buy.unwrap()),
 				postgres::SimpleQueryMessage::Row(_row) => {}
 				_ => log::debug!("[db_log_insert_trade] Something weird happened on log query."),
 			}
