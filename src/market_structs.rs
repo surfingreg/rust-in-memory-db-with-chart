@@ -41,7 +41,7 @@ impl Stat{
 	}
 
 /*	pub fn print(&self){
-		println!("Stats:\tprice\t\tdiff_ema\t\tdiff_ema_roc\t\tspread\tema1\tema2\tmin_sell\tmax_buy\n\t{}\t\t{}\t{}\n\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n", 
+		tracing::debug!("Stats:\tprice\t\tdiff_ema\t\tdiff_ema_roc\t\tspread\tema1\tema2\tmin_sell\tmax_buy\n\t{}\t\t{}\t{}\n\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
 			self.dtg,
 			self.dtg_last_tick.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),
 			self.seq_last_tick.map(|o| { format!("{}", o)}).unwrap_or("TBD".to_owned()).as_str(),

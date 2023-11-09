@@ -53,6 +53,10 @@ impl Market{
 
 	pub fn start(){
 
+		println!("[start] println");
+
+		tracing::debug!("[start]");
+
 		// Channel for websocket thread to send to database thread
 		let (tx, rx) = crossbeam::channel::unbounded();
 
@@ -66,12 +70,12 @@ impl Market{
 		}));
 
 		// Start Database
-		handles.push(std::thread::spawn(move ||->(){
-			let db_log_url = std::env::var("COIN_TRADE_LOG_DB_URL").expect("COIN_TRADE_LOG_DB_URL not found");
-			if let Some(mut client) = crate::db::db_connect(&db_log_url){
-				crate::db::db_thread(&mut client, rx);
-			};
-		}));
+		// handles.push(std::thread::spawn(move ||->(){
+		// 	let db_log_url = std::env::var("COIN_TRADE_LOG_DB_URL").expect("COIN_TRADE_LOG_DB_URL not found");
+		// 	if let Some(mut client) = crate::db::db_connect(&db_log_url){
+		// 		crate::db::db_thread(&mut client, rx);
+		// 	};
+		// }));
 
 		for h in handles {
 			h.join().unwrap();
@@ -80,11 +84,11 @@ impl Market{
 
 	fn websocket_go(&mut self){
 
-		println!("[websocket_go]");
-		let url = std::env::var("COINBASE_URL").expect("COINBASE_URL must be set");
-		println!("[websocket_go] url: {}", &url);
+		tracing::debug!("[websocket_go]");
+		let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
+		tracing::debug!("[websocket_go] url: {}", &url);
 		let (mut ws, response) = tungstenite::connect(Url::parse(&url).unwrap()).unwrap();
-		log::info!("[websocket_go] websocket connected, response: {:?}", response);
+		tracing::info!("[websocket_go] websocket connected, response: {:?}", response);
 
 		// subscribe to coinbase socket for heartbeat and tickers
 		let _ = ws.write_message(Message::Text(Market::generate_websocket_subscribe_json().to_string()));
@@ -98,11 +102,11 @@ impl Market{
 						tungstenite::error::Error::ConnectionClosed => {
 							// https://docs.rs/tungstenite/0.11.1/tungstenite/error/enum.Error.html#variant.ConnectionClosed
 							// TODO: stop the loop; attempt to reopen socket
-							log::info!("[parse_incoming_socket_blocking] socket: Error::ConnectionClosed");
+							tracing::info!("[parse_incoming_socket_blocking] socket: Error::ConnectionClosed");
 							break;
 						},
 						_ => {
-							log::info!("[parse_incoming_socket_blocking] socket read failed: {}", &e);
+							tracing::info!("[parse_incoming_socket_blocking] socket read failed: {}", &e);
 							break;
 						}
 					}
@@ -112,7 +116,8 @@ impl Market{
 						tungstenite::Message::Text(t) => {
 
 							let json_val:serde_json::Value = serde_json::from_str(&t).unwrap();
-							// println!("[ws] json_val: {:?}", &json_val);
+
+							tracing::debug!("[ws] json_val: {:?}", &json_val);
 
 							let ws_type = json_val["type"].as_str();
 
@@ -125,7 +130,7 @@ impl Market{
 								Some("ticker") => {
 
 									// json to ticker
-									// log::debug!("[ws] ticker"); /* {}", &ws_type.unwrap());*/
+									// tracing::debug!("[ws] ticker"); /* {}", &ws_type.unwrap());*/
 									// use as_str() to remove the quotation marks
 									let ticker:Option<TickerJson> = serde_json::from_value(json_val).expect("[ticker_actor] json conversion to Ticker 2 didn't work"); // unwrap_or(None);
 
@@ -144,7 +149,7 @@ impl Market{
 									// to database
 									if let Some(obj) = l2_update_opt {
 
-										// log::debug!("[ws] {:?}", &obj);
+										// tracing::debug!("[ws] {:?}", &obj);
 
 										self.process_book_update(obj.changes);
 
@@ -153,10 +158,10 @@ impl Market{
 
 								Some("snapshot") => {
 
-									// log::debug!("[ws] snapshot: {:?}", json_val);
+									// tracing::debug!("[ws] snapshot: {:?}", json_val);
 
 									let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
-									// log::debug!("[ws] snapshot: {:?}", snapshot_opt);
+									// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
 
 									if snapshot_opt.is_some() {
 
@@ -176,12 +181,12 @@ impl Market{
 									}
 								},
 								_ => {
-									log::debug!("[ws] unknown type: {:?}", json_val);
+									tracing::debug!("[ws] unknown type: {:?}", json_val);
 								},
 							}
 						},
 						_ => {
-							log::info!("[main] unknown socket message or something not text")
+							tracing::info!("[main] unknown socket message or something not text")
 						}
 					}
 				}
@@ -246,12 +251,12 @@ impl Market{
 						//let (mkt_price, mkt_size) = self.get_sell_offers_at_my_buy_price((&ticker_current).price, Decimal::from_f64(1.0).unwrap());
 						let market = self.get_sell_offers_at_my_buy_price((&ticker_current).price, trade_size_target);
 
-						// log::debug!("[process_ticker] buy market: {:?}", &market);
+						// tracing::debug!("[process_ticker] buy market: {:?}", &market);
 
 						// Create an outstanding BUY trade
 						let buy_trade = Trade::new(Utc::now(), (&ticker_current).clone(), Some(market.0), Some(market.1));
 
-						log::info!("[process_ticker:Buy] buy trade: {:?}", &buy_trade);
+						tracing::info!("[process_ticker:Buy] buy trade: {:?}", &buy_trade);
 
 						let _ = &self.trades.insert((&buy_trade).ticker_buy.sequence, buy_trade.clone());
 
@@ -272,7 +277,7 @@ impl Market{
 					// ...if there exists a previously unmatched buy
 					if self.buy_trade_unmatched != None {
 
-						log::debug!("[process_ticker:TradeRec::Sell] previous buy exists, matching...\n{:?}", &(self.buy_trade_unmatched));
+						tracing::debug!("[process_ticker:TradeRec::Sell] previous buy exists, matching...\n{:?}", &(self.buy_trade_unmatched));
 
 						// "What's the market for a seller?"
 						// Get market price and size available to buy, up to 1.0 BTC
@@ -291,7 +296,7 @@ impl Market{
 						self.buy_trade_unmatched = None;
 
 					} else {
-						log::debug!("[process_ticker:TradeRec::Sell] no previous buy exists")
+						tracing::debug!("[process_ticker:TradeRec::Sell] no previous buy exists")
 					}
 				}
 				TradeRec::Hold => {
@@ -338,10 +343,10 @@ impl Market{
 			//0: take 0.6 = I need 1.0, there's 0.6 available. min (1.0, 0.6)
 			//1. take 0.4 = I need 0.4 more, there's 0.6 available.
 			let take = std::cmp::min(size_still_needed, *size_available);
-			// println!("[get_buy_offers_at_my_sell_price] take: {}", take);
+			// tracing::debug!("[get_buy_offers_at_my_sell_price] take: {}", take);
 			// 0: 0.4 = 1.0 - 0.6
 			size_still_needed = size_still_needed - take;
-			// println!("[get_sell_offers_at_my_buy_price] size_still_needed: {}", size_still_needed);
+			// tracing::debug!("[get_sell_offers_at_my_buy_price] size_still_needed: {}", size_still_needed);
 			// how much 'size' do we need from this price point? as much as we can get up to the amount we want
 			market_bid_cost = market_bid_cost + take * k_price;
 
@@ -364,9 +369,9 @@ impl Market{
 			}
 		}
 
-		// println!("[get_buy_bids_at_my_sell_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
-		// println!("[get_buy_bids_at_my_sell_price] available profit: {}, for available size: {}", market_bid_cost, (my_size - size_still_needed));
-		// println!("[get_buy_bids_at_my_sell_price] market bid is ${} less than my desired sell price", market_bid_cost -my_price);
+		// tracing::debug!("[get_buy_bids_at_my_sell_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
+		// tracing::debug!("[get_buy_bids_at_my_sell_price] available profit: {}, for available size: {}", market_bid_cost, (my_size - size_still_needed));
+		// tracing::debug!("[get_buy_bids_at_my_sell_price] market bid is ${} less than my desired sell price", market_bid_cost -my_price);
 
 		(market_bid_cost, (my_size - size_still_needed))
 	}
@@ -394,10 +399,10 @@ impl Market{
 			//0: take 0.6 = I need 1.0, there's 0.6 available. min (1.0, 0.6)
 			//1. take 0.4 = I need 0.4 more, there's 0.6 available.
 			let take = std::cmp::min(size_still_needed, *size_available);
-			// println!("[get_sell_offers_at_my_buy_price] take: {}", take);
+			// tracing::debug!("[get_sell_offers_at_my_buy_price] take: {}", take);
 			// 0: 0.4 = 1.0 - 0.6
 			size_still_needed = size_still_needed - take;
-			// println!("[get_sell_offers_at_my_buy_price] size_still_needed: {}", size_still_needed);
+			// tracing::debug!("[get_sell_offers_at_my_buy_price] size_still_needed: {}", size_still_needed);
 			// how much 'size' do we need from this price point? as much as we can get up to the amount we want
 			market_cost = market_cost + take * k_price;
 
@@ -413,9 +418,9 @@ impl Market{
 
 		let result = (market_cost, (my_size - size_still_needed));
 
-		// println!("[get_sell_offers_at_my_buy_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
-		// println!("[get_sell_offers_at_my_buy_price] total cost: {}, for available size: {}", (&result).0, (&result).1);
-		// println!("[get_sell_offers_at_my_buy_price] market cost is ${} more than my desired price", market_cost-my_price);
+		// tracing::debug!("[get_sell_offers_at_my_buy_price] target price: {}, size: {}, available: {:?}", my_price, my_size, matching_bids);
+		// tracing::debug!("[get_sell_offers_at_my_buy_price] total cost: {}, for available size: {}", (&result).0, (&result).1);
+		// tracing::debug!("[get_sell_offers_at_my_buy_price] market cost is ${} more than my desired price", market_cost-my_price);
 
 
 		result
@@ -427,7 +432,7 @@ impl Market{
 		// TODO: what kind of sort does this imply? probably minor but print could be out of order, FYI
 		for c in changes{
 
-			// log::debug!("[process_book_update], {:?}", &c);
+			// tracing::debug!("[process_book_update], {:?}", &c);
 
 			let size = Decimal::from_str(&c.size).unwrap();
 			let size_is_zero = size == Decimal::from_u8(0).unwrap();
@@ -486,7 +491,7 @@ impl Market{
 
 		}
 
-		// println!("[latest_stat] Tickers: {}, Asks: {}, Bids: {}", &self.tickers.len(), &self.book_sell.len(), &self.book_buy.len());
+		// tracing::debug!("[latest_stat] Tickers: {}, Asks: {}, Bids: {}", &self.tickers.len(), &self.book_sell.len(), &self.book_buy.len());
 
 		Some(stat)
 
@@ -514,8 +519,8 @@ impl Market{
 			typ:"subscribe".to_owned(),
 			product_ids:vec!["BTC-USD".to_owned()],
 			// channels:vec!["ticker".to_owned(), "level2".to_owned(), "user".to_owned()]
-			channels:vec!["ticker".to_owned(), "level2".to_owned()]
-			// channels:vec!["ticker".to_owned()]
+			// channels:vec!["ticker".to_owned(), "level2".to_owned()]
+			channels:vec!["ticker".to_owned()]
 		};
 		let j : serde_json::Value = serde_json::to_value(&cb_sub).expect("[json_ws_subscribe] json serialize failed");
 		j.to_owned()
@@ -533,7 +538,7 @@ impl Market{
 			t.diff_price_ema2 = Some(t.price - t.ema2.unwrap());
 		}
 
-		// log::debug("[update_ticker_calcs] {:?}", &t);
+		// tracing::debug("[update_ticker_calcs] {:?}", &t);
 
 	}
 
@@ -556,7 +561,7 @@ impl Market{
 		// Gets an iterator over the values of the map, in order by key.
 		// https://doc.rust-lang.org/std/collections/struct.BTreeMap.html#method.values
 		let v: Vec<&TickerJson> = self.tickers.values().rev().collect();
-		// println!("[compute_moving_average] \n{:?}", &v);
+		// tracing::debug!("[compute_moving_average] \n{:?}", &v);
 
 		// get a slice of the hashmap (for 5 day ema, len() could be 3, but only want 2, at index 1, 2 with 0 being current)
 		let len_max = std::cmp::min(v.len(), n_days);

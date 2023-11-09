@@ -29,7 +29,7 @@ pub fn db_thread(client: &mut postgres::Client,rcv:crossbeam::channel::Receiver<
 						},
 						Msg::Trade(trade) => {
 
-							log::debug!("[db::db_thread Msg::Trade]");
+							tracing::debug!("[db::db_thread Msg::Trade]");
 							db_log_insert_trade(client, &trade)
 
 						}
@@ -72,22 +72,22 @@ pub fn db_thread(client: &mut postgres::Client,rcv:crossbeam::channel::Receiver<
 	sql.pop();
 	sql = format!("{};", &sql);
 
-	println!("[stats_to_db] insert: {}, elapsed: {:?}", &vec_stat.len(), start.elapsed());
+	tracing::debug!("[stats_to_db] insert: {}, elapsed: {:?}", &vec_stat.len(), start.elapsed());
 
 	let _ = client.simple_query(&sql);
 
 }*/
 
 pub fn db_connect(db_url:&str) -> Option<postgres::Client> {
-	println!("[db_connect]");
+	tracing::debug!("[db_connect]");
 	let client_result = postgres::Client::connect(&db_url, postgres::NoTls);
 	match client_result {
 		Err(e) 	=> {
-			println!("[db_connect] postgresql connection failed: {}", &e);
+			tracing::debug!("[db_connect] postgresql connection failed: {}", &e);
 			None
 		},
 		Ok(client) 	=> {
-			println!("[db_connect] Connected to postgresql");
+			tracing::debug!("[db_connect] Connected to postgresql");
 			Some(client)
 		}
 	}
@@ -160,18 +160,18 @@ fn db_log_insert_trade(client:&mut postgres::Client, t: &Trade) {
 
 	);
 
-	log::debug!("[db_log_insert_trade] sql: {}", &sql);
+	tracing::debug!("[db_log_insert_trade] sql: {}", &sql);
 
 	if let Ok(result_vec) = client.simple_query(&sql) {
 		for i in result_vec {
 			match i {
 				postgres::SimpleQueryMessage::CommandComplete(x) =>
-					log::info!("[db_log_insert_trade] {} row inserted:\n{:?}\nmkt profit: {}", x, &t, &t.price_mkt_for_sell.unwrap()-&t.price_mkt_for_buy.unwrap()),
+					tracing::info!("[db_log_insert_trade] {} row inserted:\n{:?}\nmkt profit: {}", x, &t, &t.price_mkt_for_sell.unwrap()-&t.price_mkt_for_buy.unwrap()),
 				postgres::SimpleQueryMessage::Row(_row) => {}
-				_ => log::debug!("[db_log_insert_trade] Something weird happened on log query."),
+				_ => tracing::debug!("[db_log_insert_trade] Something weird happened on log query."),
 			}
 		}
 	} else {
-		println!("[db_log_insert_trade] log insert failed");
+		tracing::debug!("[db_log_insert_trade] log insert failed");
 	}
 }
