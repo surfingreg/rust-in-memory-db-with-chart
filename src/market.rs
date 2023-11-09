@@ -10,29 +10,27 @@ use std::collections::BTreeMap;
 use crate::market_structs::{*};
 use crate::ticker::{Ticker as TickerJson} ;
 use rust_decimal::prelude::*;
-use tungstenite::{Message};
+use tungstenite::{Message, WebSocket};
 use url::Url;
 use crate::algorithm::*;
 use crate::db::Msg;
 use chrono::{Utc};
+use serde::Deserialize;
+use tungstenite::client::AutoStream;
+use tungstenite::http::Response;
+use crate::coinbase;
+use crate::coinbase::Coinbase;
 
 pub struct Market{
-
-	// btree is inherently sorted, key here is coinbase sequence so most recent is always fastest
+	// btree is inherently sorted, key here is coinbase.rs sequence so most recent is always fastest
 	tickers:BTreeMap<u64, TickerJson>,
-
 	// <price, size>
 	book_sell:BTreeMap<Decimal, Decimal>,
-
 	// <price, size>
 	book_buy:BTreeMap<Decimal, Decimal>,
-
 	tx:crossbeam::channel::Sender<Msg>,
-
 	stats:Vec<Stat>,
-
 	trades: BTreeMap<u64 ,Trade>,
-
 	buy_trade_unmatched: Option<Trade>,
 
 }
@@ -52,9 +50,6 @@ impl Market{
 	}
 
 	pub fn start(){
-
-		println!("[start] println");
-
 		tracing::debug!("[start]");
 
 		// Channel for websocket thread to send to database thread
@@ -65,8 +60,8 @@ impl Market{
 
 		// Start Websocket
 		let mut handles = vec![];
-		handles.push (std::thread::spawn( move || {
-			let _ws = myself.websocket_go();
+		handles.push( std::thread::spawn( move || {
+			let _ws = myself.ws_connect();
 		}));
 
 		// Start Database
@@ -82,118 +77,169 @@ impl Market{
 		}
 	}
 
-	fn websocket_go(&mut self){
 
-		tracing::debug!("[websocket_go]");
-		let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
-		tracing::debug!("[websocket_go] url: {}", &url);
-		let (mut ws, response) = tungstenite::connect(Url::parse(&url).unwrap()).unwrap();
+
+	fn ws_process(&mut self, mut ws: WebSocket<AutoStream>, response: Response<()>) {
+		// let (mut ws, response) = tungstenite::connect(Url::parse(&url).unwrap()).unwrap();
 		tracing::info!("[websocket_go] websocket connected, response: {:?}", response);
 
-		// subscribe to coinbase socket for heartbeat and tickers
+		// subscribe to coinbase.rs socket for heartbeat and tickers
 		let _ = ws.write_message(Message::Text(Market::generate_websocket_subscribe_json().to_string()));
 
 		// parse incoming messages
 		loop {
 			let msg_result = ws.read_message();
+
+			// Ok(Text("{\"type\":\"ticker\",\"sequence\":68161040101,\"product_id\":\"BTC-USD\",\"price\":\"36557.84\",\"open_24h\":\"35593.39\",\"volume_24h\":\"29347.72624298\",\"low_24h\":\"35555.16\",\"high_24h\":\"37999\",\"volume_30d\":\"413614.02343353\",\"best_bid\":\"36554.94\",\"best_bid_size\":\"0.02024396\",\"best_ask\":\"36557.84\",\"best_ask_size\":\"0.00875776\",\"side\":\"buy\",\"time\":\"2023-11-09T21:17:51.262478Z\",\"trade_id\":576007711,\"last_size\":\"0.00173305\"}"))
+
 			match msg_result {
-				Err(e) => {
-					match e {
-						tungstenite::error::Error::ConnectionClosed => {
-							// https://docs.rs/tungstenite/0.11.1/tungstenite/error/enum.Error.html#variant.ConnectionClosed
-							// TODO: stop the loop; attempt to reopen socket
-							tracing::info!("[parse_incoming_socket_blocking] socket: Error::ConnectionClosed");
-							break;
+				Ok(tungstenite::Message::Text(t)) => {
+
+					let json:Coinbase = serde_json::from_str(&t).unwrap();
+
+					match json {
+						Coinbase::Subscriptions(s)=>{
+							tracing::debug!("[Coinbase::Subscriptions] {:?}", &s);
 						},
-						_ => {
-							tracing::info!("[parse_incoming_socket_blocking] socket read failed: {}", &e);
-							break;
+						Coinbase::Ticker(t)=>{
+							tracing::debug!("[Coinbase::Ticker] {:?}", &t);
+						},
+						Coinbase::Heartbeat=>{
+							tracing::debug!("[ws][text] {:?}", &t);
+							tracing::debug!("[Coinbase::Heartbeat]");
+							panic!();
+						},
+						_ =>{
+							tracing::debug!("[ws][text] {:?}", &t);
+							tracing::error!("[Coinbase::something else] {:?}", &t);
+							panic!();
 						}
 					}
 				},
-				Ok(msg) => {
-					match msg {
-						tungstenite::Message::Text(t) => {
+				_ => {}
 
-							let json_val:serde_json::Value = serde_json::from_str(&t).unwrap();
-
-							tracing::debug!("[ws] json_val: {:?}", &json_val);
-
-							let ws_type = json_val["type"].as_str();
-
-
-							// Type
-							match ws_type {
-
-								Some("heartbeat") => {},
-
-								Some("ticker") => {
-
-									// json to ticker
-									// tracing::debug!("[ws] ticker"); /* {}", &ws_type.unwrap());*/
-									// use as_str() to remove the quotation marks
-									let ticker:Option<TickerJson> = serde_json::from_value(json_val).expect("[ticker_actor] json conversion to Ticker 2 didn't work"); // unwrap_or(None);
-
-									if let Some(obj) = ticker {
-
-										self.process_ticker(obj);
-
-									}
-								},
-
-								Some("l2update") => {
-
-									// parse json
-									let l2_update_opt: Option<UpdateL2> = serde_json::from_value(json_val).expect("[L2 Update] json conversion didn't work");
-
-									// to database
-									if let Some(obj) = l2_update_opt {
-
-										// tracing::debug!("[ws] {:?}", &obj);
-
-										self.process_book_update(obj.changes);
-
-									}
-								},
-
-								Some("snapshot") => {
-
-									// tracing::debug!("[ws] snapshot: {:?}", json_val);
-
-									let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
-									// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
-
-									if snapshot_opt.is_some() {
-
-										let snap:Snapshot = snapshot_opt.unwrap();
-
-										for buy in &snap.bids {
-
-											let _ = &self.book_buy.insert(buy.price.clone(), buy.size.clone());
-
-										}
-
-										for sell in &snap.asks {
-
-											let _ = &self.book_sell.insert(sell.price.clone(), sell.size.clone());
-
-										}
-									}
-								},
-								_ => {
-									tracing::debug!("[ws] unknown type: {:?}", json_val);
-								},
-							}
-						},
-						_ => {
-							tracing::info!("[main] unknown socket message or something not text")
-						}
-					}
-				}
+				//
+				//
+				// Ok(msg) => {
+				// 	match msg {
+				// 		tungstenite::Message::Text(t) => {
+				// 			let json_val:serde_json::Value = serde_json::from_str(&t).unwrap();
+				// 			tracing::debug!("[ws] json_val: {:?}", &json_val);
+				// 			let ws_type = json_val["type"].as_str();
+				//
+				// 			// Type
+				// 			match ws_type {
+				//
+				// 				// TODO: make these types an enum
+				//
+				// 				Some("heartbeat") => {
+				// 					tracing::debug!("[heartbeat]");
+				// 				},
+				//
+				// 				Some("ticker") => {
+				// 					// json to ticker
+				// 					let ticker_opt:Option<TickerJson> = serde_json::from_value(json_val).expect("[ticker_actor] json conversion to Ticker 2 didn't work");
+				//
+				// 					if let Some(ticker) = ticker_opt {
+				// 						self.process_ticker(ticker);
+				// 					}
+				// 				},
+				//
+				// 				Some("l2update") => {
+				//
+				// 					// parse json
+				// 					let l2_update_opt: Option<UpdateL2> = serde_json::from_value(json_val).expect("[L2 Update] json conversion didn't work");
+				//
+				// 					// to database
+				// 					if let Some(obj) = l2_update_opt {
+				//
+				// 						// tracing::debug!("[ws] {:?}", &obj);
+				//
+				// 						self.process_book_update(obj.changes);
+				//
+				// 					}
+				// 				},
+				// 				Some("snapshot") => {
+				//
+				// 					// tracing::debug!("[ws] snapshot: {:?}", json_val);
+				//
+				// 					let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
+				// 					// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
+				//
+				// 					if snapshot_opt.is_some() {
+				//
+				// 						let snap:Snapshot = snapshot_opt.unwrap();
+				//
+				// 						for buy in &snap.bids {
+				//
+				// 							let _ = &self.book_buy.insert(buy.price.clone(), buy.size.clone());
+				//
+				// 						}
+				//
+				// 						for sell in &snap.asks {
+				//
+				// 							let _ = &self.book_sell.insert(sell.price.clone(), sell.size.clone());
+				//
+				// 						}
+				// 					}
+				// 				},
+				// 				_ => {
+				// 					tracing::debug!("[ws] unknown type: {:?}", json_val);
+				// 				},
+				// 			}
+				// 		},
+				// 		_ => {
+				// 			tracing::info!("[main] unknown socket message or something not text")
+				// 		}
+				// 	}
+				// },
+				// Err(e) => {
+				// 	match e {
+				// 		tungstenite::error::Error::ConnectionClosed => {
+				// 			// https://docs.rs/tungstenite/0.11.1/tungstenite/error/enum.Error.html#variant.ConnectionClosed
+				// 			// TODO: stop the loop; attempt to reopen socket
+				// 			tracing::info!("[parse_incoming_socket_blocking] socket: Error::ConnectionClosed");
+				// 			break;
+				// 		},
+				// 		_ => {
+				// 			tracing::info!("[parse_incoming_socket_blocking] socket read failed: {}", &e);
+				// 			break;
+				// 		}
+				// 	}
+				// },
 			}
 		}
 	}
 
+	fn ws_connect(&mut self){
+
+		tracing::debug!("[websocket_go]");
+		let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
+		tracing::debug!("[websocket_go] url: {}", &url);
+		let url_opt = Url::parse(&url);
+		match url_opt{
+			Ok(url)=>{
+				match tungstenite::connect(url){
+					Ok((mut ws, response)) => {
+						self.ws_process(ws, response);
+					},
+					Err(e)=>{
+						tracing::error!("[ws] connect error: {:?}", e);
+					},
+					_=>{
+						tracing::error!("[ws] something weird with websocket");
+					}
+				}
+			},
+			Err(e)=>{
+				tracing::error!("[ws] url error: {:?}", e);
+			}
+		}
+
+	}
+
+
+	/// See if there's anything to be done about incoming ticker data
 	fn process_ticker(&mut self, mut ticker_current:TickerJson) {
 
 		// calculate emas
@@ -307,18 +353,6 @@ impl Market{
 	}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 	/// I want to sell X.0 BTC at $Y.YY. What are the bids out there that would match my offer and quantity?
 	/// Get the highest buy offers until my quantity is fill.
 	fn get_buy_bids_at_my_sell_price(&self, _my_price:Decimal, my_size:Decimal) -> (Decimal, Decimal) {
@@ -425,7 +459,6 @@ impl Market{
 
 		result
 	}
-
 
 	fn process_book_update(&mut self, changes:Vec<Change>){
 

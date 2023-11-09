@@ -12,11 +12,11 @@ tracing-subscriber = {version = "0.3.16", features=[ "std", "registry", "env-fil
 strum={ version= "0.25.0", features=["derive"]}  # https://stackoverflow.com/questions/69015213/how-can-i-display-an-enum-in-lowercase
 strum_macros = "0.25.1"
 
-
+bigdecimal = {version = "0.4.1", features = ["serde"]}
 
 # Chrono with serde
 # https://docs.rs/chrono/0.4.19/chrono/index.html
-chrono = { version = "0.4.15", features = ["serde"]}
+chrono = { version = "0.4.1", features = ["serde"]}
 
 # https://crates.io/crates/rust_decimal
 rust_decimal = "1.8.1"
