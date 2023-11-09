@@ -1,4 +1,4 @@
-
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -8,17 +8,17 @@ pub struct Ticker{
 	#[serde(rename = "time")]
 	pub dtg:DateTime::<Utc>,
 	pub sequence:u64,
-	pub price:rust_decimal::Decimal,
+	pub price:BigDecimal,
 	// 05 day (tighter, more accurate)
-	pub ema1:Option<rust_decimal::Decimal>,
+	pub ema1:Option<BigDecimal>,
 	// 20 day (smoother, less accurate)
-	pub ema2:Option<rust_decimal::Decimal>,
-	pub diff_ema:Option<rust_decimal::Decimal>,
+	pub ema2:Option<BigDecimal>,
+	pub diff_ema:Option<BigDecimal>,
 	// rate of change of the moving average diff (accelerating/decelerating)
-	pub diff_ema_roc:Option<rust_decimal::Decimal>,
+	pub diff_ema_roc:Option<BigDecimal>,
 	// how far does price lead?
-	pub diff_price_ema1:Option<rust_decimal::Decimal>,
-	pub diff_price_ema2:Option<rust_decimal::Decimal>,
+	pub diff_price_ema1:Option<BigDecimal>,
+	pub diff_price_ema2:Option<BigDecimal>,
 
 }
 
@@ -26,13 +26,13 @@ impl Ticker{
 	pub fn new(
 		dtg:DateTime::<Utc>,
 		sequence:u64,
-		price:rust_decimal::Decimal,
-		ema1:Option<rust_decimal::Decimal>,
-		ema2:Option<rust_decimal::Decimal>,
-		diff_ema:Option<rust_decimal::Decimal>,
-		diff_ema_roc:Option<rust_decimal::Decimal>,
-		diff_price_ema1:Option<rust_decimal::Decimal>,
-		diff_price_ema2:Option<rust_decimal::Decimal>,
+		price:BigDecimal,
+		ema1:Option<BigDecimal>,
+		ema2:Option<BigDecimal>,
+		diff_ema:Option<BigDecimal>,
+		diff_ema_roc:Option<BigDecimal>,
+		diff_price_ema1:Option<BigDecimal>,
+		diff_price_ema2:Option<BigDecimal>,
 	)->Ticker{
 		Ticker{
 			dtg,
@@ -51,13 +51,13 @@ impl Ticker{
 		Ticker::new(
 			self.dtg,
 			self.sequence,
-			self.price,
-			self.ema1,
-			self.ema2,
-			self.diff_ema,
-			self.diff_ema_roc,
-			self.diff_price_ema1,
-			self.diff_price_ema2,
+			self.price.clone(),
+			self.ema1.clone(),
+			self.ema2.clone(),
+			self.diff_ema.clone(),
+			self.diff_ema_roc.clone(),
+			self.diff_price_ema1.clone(),
+			self.diff_price_ema2.clone(),
 		)
 	}
 }
