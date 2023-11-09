@@ -164,13 +164,13 @@ impl Market{
 
 										for buy in &snap.bids {
 
-											&self.book_buy.insert(buy.price.clone(), buy.size.clone());
+											let _ = &self.book_buy.insert(buy.price.clone(), buy.size.clone());
 
 										}
 
 										for sell in &snap.asks {
 
-											&self.book_sell.insert(sell.price.clone(), sell.size.clone());
+											let _ = &self.book_sell.insert(sell.price.clone(), sell.size.clone());
 
 										}
 									}
@@ -207,7 +207,7 @@ impl Market{
 		self.tickers.insert((&ticker_current).sequence, (&ticker_current).clone());
 
 		// statistic based on this latest ticker
-		&self.save_stat();
+		let _ = &self.save_stat();
 
 		// Get trade recommendation
 		if ticker_previous.is_some() {
@@ -253,7 +253,7 @@ impl Market{
 
 						log::info!("[process_ticker:Buy] buy trade: {:?}", &buy_trade);
 
-						&self.trades.insert((&buy_trade).ticker_buy.sequence, buy_trade.clone());
+						let _ = &self.trades.insert((&buy_trade).ticker_buy.sequence, buy_trade.clone());
 
 						// Save the unmatched buy half of the trade for match with a follow-on sell
 						self.buy_trade_unmatched = Some(buy_trade.clone());
@@ -437,24 +437,24 @@ impl Market{
 
 				if size_is_zero {
 					// if the size is zero, remove it
-					&self.book_buy.remove(&price);
+					let _ = &self.book_buy.remove(&price);
 				} else {
 					// if the size is not zero, add/replace what's in the btreemap
-					&self.book_buy.insert(price, size);
+					let _ = &self.book_buy.insert(price, size);
 				}
 
 			} else if &c.side == "sell" {
 				if size_is_zero {
 					// if the size is zero, remove it
-					&self.book_sell.remove(&price);
+					let _ = &self.book_sell.remove(&price);
 				} else {
 					// if the size is not zero, add/replace what's in the btreemap
-					&self.book_sell.insert(price, size);
+					let _ = &self.book_sell.insert(price, size);
 				}
 			}
 
 			// print stats on every entry
-			&self.save_stat();
+			let _ = &self.save_stat();
 		}
 	}
 
