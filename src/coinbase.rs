@@ -1,9 +1,8 @@
 //! coinbase.rs
 
-use std::str::FromStr;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -43,5 +42,5 @@ pub struct Ticker{
 #[derive(Debug, Deserialize)]
 pub enum ProductId {
 	#[serde(rename="BTC-USD")]
-	Btc_Usd,
+	BtcUsd,
 }

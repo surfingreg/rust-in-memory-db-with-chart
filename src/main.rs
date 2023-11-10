@@ -22,7 +22,7 @@ mod market_structs;
 mod ticker;
 mod algorithm;
 mod db;
-mod coinbase;
+
 
 use std::str::FromStr;
 use tracing_subscriber::layer::SubscriberExt;

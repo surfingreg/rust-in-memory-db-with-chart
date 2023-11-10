@@ -1,19 +1,14 @@
+//! db.rs
 
 
 
-use crate::market_structs::{Stat, Trade};
-use std::thread::JoinHandle;
-use chrono::{Utc};
-
-
-
-#[derive(Debug)]
-pub enum Msg{
-	// Statistic(Stat),
-	StatVector(Vec<Stat>),
-	Trade(Trade),
-
-}
+// #[derive(Debug)]
+// pub enum Msg{
+// 	// Statistic(Stat),
+// 	StatVector(Vec<Stat>),
+// 	Trade(Trade),
+//
+// }
 
 // /// Listen on a different thread for messages to persist to postgresql
 // /// Each db network call takes 150-300ms on LAN/wifi

@@ -1,66 +1,51 @@
-// stats dtg, dtg_last_ticker to stats
-// capture book on startup
-// TODO: consider moving stats variables to object-level to make them available elsewhere (like in a message to a database)
-// stats btreemap
-// save stats to postgresql, but only once in a while
-// prune tickers and book maps occasionally
-// TODO: diff_ema_roc
+//! market.rs
+//!
 
-use std::collections::BTreeMap;
-use std::str::FromStr;
-use bigdecimal::{BigDecimal, FromPrimitive};
-use crate::market_structs::{*};
-use crate::ticker::{Ticker as TickerJson} ;
-use tungstenite::{Message, WebSocket};
-use url::Url;
-use crate::algorithm::*;
-use crate::db::Msg;
-use chrono::{Utc};
-use tungstenite::client::AutoStream;
-use tungstenite::http::Response;
-use crate::coinbase::Coinbase;
+use ws_lib::websocket::ws_connect;
+
+
 
 pub struct Market{
-	// btree is inherently sorted, key here is coinbase.rs sequence so most recent is always fastest
-	tickers:BTreeMap<u64, TickerJson>,
-	// <price, size>
-	book_sell:BTreeMap<BigDecimal, BigDecimal>,
-	// <price, size>
-	book_buy:BTreeMap<BigDecimal, BigDecimal>,
-	tx:crossbeam::channel::Sender<Msg>,
-	stats:Vec<Stat>,
-	trades: BTreeMap<u64 ,Trade>,
-	buy_trade_unmatched: Option<Trade>,
+	// // btree is inherently sorted, key here is coinbase.rs sequence so most recent is always fastest
+	// tickers:BTreeMap<u64, TickerJson>,
+	// // <price, size>
+	// book_sell:BTreeMap<BigDecimal, BigDecimal>,
+	// // <price, size>
+	// book_buy:BTreeMap<BigDecimal, BigDecimal>,
+	// // tx:crossbeam::channel::Sender<Msg>,
+	// stats:Vec<Stat>,
+	// trades: BTreeMap<u64 ,Trade>,
+	// buy_trade_unmatched: Option<Trade>,
 
 }
 
 impl Market{
 
-	fn new(tx:crossbeam::channel::Sender<Msg>) -> Self{
-		Self{
-			tickers : BTreeMap::new(),
-			book_sell : BTreeMap::new(),
-			book_buy : BTreeMap::new(),
-			tx : tx,
-			stats: vec![],
-			trades : BTreeMap::new(),
-			buy_trade_unmatched : None,
-		}
-	}
+	// fn new(tx:crossbeam::channel::Sender<Msg>) -> Self{
+	// 	Self{
+	// 		tickers : BTreeMap::new(),
+	// 		book_sell : BTreeMap::new(),
+	// 		book_buy : BTreeMap::new(),
+	// 		tx : tx,
+	// 		stats: vec![],
+	// 		trades : BTreeMap::new(),
+	// 		buy_trade_unmatched : None,
+	// 	}
+	// }
 
 	pub fn start(){
 		tracing::debug!("[start]");
 
-		// Channel for websocket thread to send to database thread
-		let (tx, rx) = crossbeam::channel::unbounded();
+		// Channel for lib_websocket thread to send to database thread
+		// let (tx, rx) = crossbeam::channel::unbounded();
 
 		// This
-		let mut myself:Market = Market::new(tx);
+		// let mut myself:Market = Market::new(tx);
 
 		// Start Websocket
 		let mut handles = vec![];
 		handles.push( std::thread::spawn( move || {
-			let _ws = myself.ws_connect();
+			let _ws = ws_connect();
 		}));
 
 		// Start Database
@@ -77,166 +62,19 @@ impl Market{
 	}
 
 
+	/*
 
-	fn ws_process(&self, mut ws: WebSocket<AutoStream>, response: Response<()>) {
-		// let (mut ws, response) = tungstenite::connect(Url::parse(&url).unwrap()).unwrap();
-		tracing::info!("[websocket_go] websocket connected, response: {:?}", response);
 
-		// subscribe to coinbase.rs socket for heartbeat and tickers
-		let _ = ws.write_message(Message::Text(Market::generate_websocket_subscribe_json().to_string()));
-
-		// parse incoming messages
-		loop {
-			let msg_result = ws.read_message();
-
-			// Ok(Text("{\"type\":\"ticker\",\"sequence\":68161040101,\"product_id\":\"BTC-USD\",\"price\":\"36557.84\",\"open_24h\":\"35593.39\",\"volume_24h\":\"29347.72624298\",\"low_24h\":\"35555.16\",\"high_24h\":\"37999\",\"volume_30d\":\"413614.02343353\",\"best_bid\":\"36554.94\",\"best_bid_size\":\"0.02024396\",\"best_ask\":\"36557.84\",\"best_ask_size\":\"0.00875776\",\"side\":\"buy\",\"time\":\"2023-11-09T21:17:51.262478Z\",\"trade_id\":576007711,\"last_size\":\"0.00173305\"}"))
-
-			match msg_result {
-				Ok(Message::Text(t)) => {
-
-					let json:Coinbase = serde_json::from_str(&t).unwrap();
-
-					match json {
-						Coinbase::Subscriptions(s)=>{
-							tracing::debug!("[Coinbase::Subscriptions] {:?}", &s);
-						},
-						Coinbase::Ticker(t)=>{
-							tracing::debug!("[Coinbase::Ticker] {:?}", &t);
-						},
-						Coinbase::Heartbeat=>{
-							tracing::debug!("[ws][text] {:?}", &t);
-							tracing::debug!("[Coinbase::Heartbeat]");
-							panic!();
-						},
-						_ =>{
-							tracing::debug!("[ws][text] {:?}", &t);
-							tracing::error!("[Coinbase::something else] {:?}", &t);
-							panic!();
-						}
-					}
-				},
-				_ => {}
-
-				//
-				//
-				// Ok(msg) => {
-				// 	match msg {
-				// 		tungstenite::Message::Text(t) => {
-				// 			let json_val:serde_json::Value = serde_json::from_str(&t).unwrap();
-				// 			tracing::debug!("[ws] json_val: {:?}", &json_val);
-				// 			let ws_type = json_val["type"].as_str();
-				//
-				// 			// Type
-				// 			match ws_type {
-				//
-				// 				// TODO: make these types an enum
-				//
-				// 				Some("heartbeat") => {
-				// 					tracing::debug!("[heartbeat]");
-				// 				},
-				//
-				// 				Some("ticker") => {
-				// 					// json to ticker
-				// 					let ticker_opt:Option<TickerJson> = serde_json::from_value(json_val).expect("[ticker_actor] json conversion to Ticker 2 didn't work");
-				//
-				// 					if let Some(ticker) = ticker_opt {
-				// 						self.process_ticker(ticker);
-				// 					}
-				// 				},
-				//
-				// 				Some("l2update") => {
-				//
-				// 					// parse json
-				// 					let l2_update_opt: Option<UpdateL2> = serde_json::from_value(json_val).expect("[L2 Update] json conversion didn't work");
-				//
-				// 					// to database
-				// 					if let Some(obj) = l2_update_opt {
-				//
-				// 						// tracing::debug!("[ws] {:?}", &obj);
-				//
-				// 						self.process_book_update(obj.changes);
-				//
-				// 					}
-				// 				},
-				// 				Some("snapshot") => {
-				//
-				// 					// tracing::debug!("[ws] snapshot: {:?}", json_val);
-				//
-				// 					let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
-				// 					// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
-				//
-				// 					if snapshot_opt.is_some() {
-				//
-				// 						let snap:Snapshot = snapshot_opt.unwrap();
-				//
-				// 						for buy in &snap.bids {
-				//
-				// 							let _ = &self.book_buy.insert(buy.price.clone(), buy.size.clone());
-				//
-				// 						}
-				//
-				// 						for sell in &snap.asks {
-				//
-				// 							let _ = &self.book_sell.insert(sell.price.clone(), sell.size.clone());
-				//
-				// 						}
-				// 					}
-				// 				},
-				// 				_ => {
-				// 					tracing::debug!("[ws] unknown type: {:?}", json_val);
-				// 				},
-				// 			}
-				// 		},
-				// 		_ => {
-				// 			tracing::info!("[main] unknown socket message or something not text")
-				// 		}
-				// 	}
-				// },
-				// Err(e) => {
-				// 	match e {
-				// 		tungstenite::error::Error::ConnectionClosed => {
-				// 			// https://docs.rs/tungstenite/0.11.1/tungstenite/error/enum.Error.html#variant.ConnectionClosed
-				// 			// TODO: stop the loop; attempt to reopen socket
-				// 			tracing::info!("[parse_incoming_socket_blocking] socket: Error::ConnectionClosed");
-				// 			break;
-				// 		},
-				// 		_ => {
-				// 			tracing::info!("[parse_incoming_socket_blocking] socket read failed: {}", &e);
-				// 			break;
-				// 		}
-				// 	}
-				// },
-			}
-		}
+	fn get_case_count() -> Result<u32> {
+		let (mut socket, _) = connect(Url::parse("ws://localhost:9001/getCaseCount").unwrap())?;
+		let msg = socket.read()?;
+		socket.close(None)?;
+		Ok(msg.into_text()?.parse::<u32>().unwrap())
 	}
+*/
 
-	fn ws_connect(&mut self){
 
-		tracing::debug!("[websocket_go]");
-		let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
-		tracing::debug!("[websocket_go] url: {}", &url);
-		let url_opt = Url::parse(&url);
-		match url_opt{
-			Ok(url)=>{
 
-				match tungstenite::connect(url){
-					Ok((ws, response)) => {
-						self.ws_process(ws, response);
-					},
-					Err(e)=>{
-						tracing::error!("[ws] connect error: {:?}", e);
-					},
-					_=>{
-						tracing::error!("[ws] something weird with websocket");
-					}
-				}
-			},
-			Err(e)=>{
-				tracing::error!("[ws] url error: {:?}", e);
-			}
-		}
-
-	}
 
 	//
 	// /// See if there's anything to be done about incoming ticker data
@@ -547,18 +385,7 @@ impl Market{
 	// 	};
 	// }
 
-	fn generate_websocket_subscribe_json() -> serde_json::Value {
-		let cb_sub = Subscribe{
-			typ:"subscribe".to_owned(),
-			product_ids:vec!["BTC-USD".to_owned()],
-			// channels:vec!["ticker".to_owned(), "level2".to_owned(), "user".to_owned()]
-			// channels:vec!["ticker".to_owned(), "level2".to_owned()]
-			channels:vec!["ticker".to_owned()]
-		};
-		let j : serde_json::Value = serde_json::to_value(&cb_sub).expect("[json_ws_subscribe] json serialize failed");
-		j.to_owned()
-	
-	}
+
 
 	// // TODO: not so "functional", causes an effect
 	// fn update_ticker_calcs(&self, t: &mut TickerJson) {

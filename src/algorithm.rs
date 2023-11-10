@@ -1,19 +1,13 @@
-use bigdecimal::{BigDecimal, FromPrimitive};
-/**
+//! algorithm.rs
 
-	Algorithms
+// use crate::ticker::Ticker;
 
-
-*/
-
-use crate::ticker::Ticker;
-
-#[derive(Debug)]
-pub enum TradeRec {
-	Buy,
-	Sell,
-	Hold,
-}
+// #[derive(Debug)]
+// pub enum TradeRec {
+// 	Buy,
+// 	Sell,
+// 	Hold,
+// }
 
 
 // /// Compare current and previous tickers for EMA cross
