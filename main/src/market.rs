@@ -1,8 +1,6 @@
 //! market.rs
 //!
 
-use ws_lib::websocket::ws_connect;
-
 
 
 pub struct Market{
@@ -32,34 +30,34 @@ impl Market{
 	// 		buy_trade_unmatched : None,
 	// 	}
 	// }
-
-	pub fn start(){
-		tracing::debug!("[start]");
-
-		// Channel for lib_websocket thread to send to database thread
-		// let (tx, rx) = crossbeam::channel::unbounded();
-
-		// This
-		// let mut myself:Market = Market::new(tx);
-
-		// Start Websocket
-		let mut handles = vec![];
-		handles.push( std::thread::spawn( move || {
-			let _ws = ws_connect();
-		}));
-
-		// Start Database
-		// handles.push(std::thread::spawn(move ||->(){
-		// 	let db_log_url = std::env::var("COIN_TRADE_LOG_DB_URL").expect("COIN_TRADE_LOG_DB_URL not found");
-		// 	if let Some(mut client) = crate::db::db_connect(&db_log_url){
-		// 		crate::db::db_thread(&mut client, rx);
-		// 	};
-		// }));
-
-		for h in handles {
-			h.join().unwrap();
-		}
-	}
+	//
+	// pub fn start(){
+	// 	tracing::debug!("[start]");
+	//
+	// 	// Channel for lib_websocket thread to send to database thread
+	// 	// let (tx, rx) = crossbeam::channel::unbounded();
+	//
+	// 	// This
+	// 	// let mut myself:Market = Market::new(tx);
+	//
+	// 	// Start Websocket
+	// 	let mut handles = vec![];
+	// 	handles.push( std::thread::spawn( move || {
+	// 		let _ws = ws_connect();
+	// 	}));
+	//
+	// 	// Start Database
+	// 	// handles.push(std::thread::spawn(move ||->(){
+	// 	// 	let db_log_url = std::env::var("COIN_TRADE_LOG_DB_URL").expect("COIN_TRADE_LOG_DB_URL not found");
+	// 	// 	if let Some(mut client) = crate::db::db_connect(&db_log_url){
+	// 	// 		crate::db::db_thread(&mut client, rx);
+	// 	// 	};
+	// 	// }));
+	//
+	// 	for h in handles {
+	// 		h.join().unwrap();
+	// 	}
+	// }
 
 
 	/*
