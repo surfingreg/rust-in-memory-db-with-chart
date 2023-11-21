@@ -2,47 +2,43 @@
 
 use std::error::Error;
 use std::net::TcpStream;
+use std::thread::JoinHandle;
+use crossbeam::channel::Sender;
 use serde::{Deserialize, Serialize};
 use tungstenite::{connect, Message, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
 use url::Url;
-use crate::coinbase::Coinbase;
+use common_lib::operator::Msg;
+use crate::coinbase::{Coinbase, Ticker};
 
 /// Start a new thread listening to the coinbase websocket
-pub fn run(){
-    tracing::debug!("[run]");
+pub fn run(tx:Sender<Msg<Ticker>>) -> JoinHandle<()> {
 
-    // Start Websocket
-    let mut handles = vec![];
-    handles.push( std::thread::spawn( move || {
-        let _ws = ws_connect();
-    }));
+    tracing::debug!("[run] spawning websocket...");
+    std::thread::spawn(move || {
+        let _ws = ws_connect(tx);
+    })
 
-    for h in handles {
-        h.join().unwrap();
-    }
 }
 
 /// The new thread listening to the coinbase websocket
-pub fn ws_connect() -> Result<(), Box<dyn Error>> {
+pub fn ws_connect(tx:Sender<Msg<Ticker>>) -> Result<(), Box<dyn Error>> {
 
     // https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html
     let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
     tracing::debug!("[websocket_go] url: {}", &url);
+    #[allow(unused_mut)]
     let (mut socket, _) = connect(Url::parse(&url)?)?;
-    ws_process(socket);
+    ws_process(socket, tx);
     Ok(())
 }
 
 /// Todo: make websocket post-processing asynchronous
-fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>) {
-    // let (mut ws, response) = tungstenite::connect(Url::parse(&url).unwrap()).unwrap();
-    // tracing::info!("[websocket_go] lib_websocket connected, response: {:?}", response);
-
+fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx:Sender<Msg<Ticker>>) {
     // subscribe to coinbase.rs socket for heartbeat and tickers
     let _ = ws.send(Message::Text(generate_websocket_subscribe_json().to_string()));
 
-    // parse incoming messages
+    // parse incoming
     loop {
         let msg_result = ws.read();
 
@@ -55,7 +51,10 @@ fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>) {
                         tracing::debug!("[Coinbase::Subscriptions] {:?}", &s);
                     },
                     Coinbase::Ticker(t)=>{
-                        tracing::debug!("[Coinbase::Ticker] {:?}", &t);
+                        // tracing::debug!("[Coinbase::Ticker] {:?}", &t);
+                        if let Err(e) = tx.send(Msg::Log(t)){
+                            tracing::error!("[ws_process] send error: {:?}", &e);
+                        }
                     },
                     Coinbase::Heartbeat=>{
                         tracing::debug!("[ws][text] {:?}", &t);
