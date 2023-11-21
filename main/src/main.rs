@@ -16,8 +16,8 @@ market_watcher:latest
 */
 
 
-use coinbase_websocket::websocket;
 use common_lib::init::init;
+use coinbase_websocket::websocket;
 
 fn main() {
 	init(env!("CARGO_MANIFEST_DIR"));
