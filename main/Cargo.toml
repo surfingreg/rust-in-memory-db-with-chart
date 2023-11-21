@@ -13,6 +13,7 @@ name="main"
 path="src/main.rs"
 
 [dependencies]
+arrow_lib = { path ="../arrow_db"}
 common_lib = { path="../common_lib"}
 coinbase_websocket = { path="../coinbase_websocket"}
 dotenvy = "0.15.6"

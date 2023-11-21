@@ -3,4 +3,5 @@ members = [
     "common_lib",
     "main",
      "coinbase_websocket",
+    "arrow_db",
 ]

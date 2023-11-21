@@ -15,35 +15,27 @@ market_watcher:latest
 
 */
 
-use std::time::Duration;
-use crossbeam::channel::tick;
-// use coinbase_websocket::coinbase::Coinbase::Ticker;
+
+use arrow_lib::arrow_db;
 use common_lib::init::init;
 use coinbase_websocket::websocket;
 use common_lib::operator;
-use common_lib::operator::Msg;
-use coinbase_websocket::coinbase::Ticker;
 
 fn main() {
+	// general logging stuff I always do
 	init(env!("CARGO_MANIFEST_DIR"));
 
-	let (tx,rx) = operator::get_operator_comms();
-	let _h = operator::run::<Ticker>(rx);
+	// operator thread
+	let tx_operator = operator::run();
 
-	let tx1 = tx.clone();
-	let _h = websocket::run(tx1);
+	// database
 
-	// heartbeat
-	let tx2=tx.clone();
-	let h = std::thread::spawn(move ||{
+	let _tx_db = arrow_db::run();
 
-		let ticker = tick(Duration::from_millis(2000));
-		loop{
-			tx2.send(Msg::Ping).unwrap();
-			// tracing::debug!("[main] sending ping to operator");
-			ticker.recv().unwrap();
-		}
+	// coinbase websocket thread
+	let tx1 = tx_operator.clone();
+	let h = websocket::run(tx1);
+	h.join().unwrap();
 
-	});
-	let _ = h.join();
 }
+
