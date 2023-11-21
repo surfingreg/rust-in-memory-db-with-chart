@@ -25,16 +25,14 @@ fn main() {
 	// general logging stuff I always do
 	init(env!("CARGO_MANIFEST_DIR"));
 
+	// database thread
+	let tx_db = arrow_db::run();
+
 	// operator thread
-	let tx_operator = operator::run();
-
-	// database
-
-	let _tx_db = arrow_db::run();
+	let tx_operator = operator::run(tx_db);
 
 	// coinbase websocket thread
-	let tx1 = tx_operator.clone();
-	let h = websocket::run(tx1);
+	let h = websocket::run(tx_operator.clone());
 	h.join().unwrap();
 
 }

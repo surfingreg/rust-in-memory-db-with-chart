@@ -7,6 +7,8 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use crossbeam_channel::{Sender, tick, unbounded};
 
+const PING_MS:u64 = 10000;
+
 #[derive(Debug)]
 pub enum ArrowDbMsg{
     // Post(T),
@@ -22,9 +24,9 @@ pub enum ArrowDbMsg{
 #[derive(Debug)]
 // #[serde(rename_all = "snake_case")]
 pub struct PriceEvent{
-    dtg:DateTime<Utc>,
-    product_id:String,
-    price:BigDecimal,
+    pub dtg:DateTime<Utc>,
+    pub product_id:String,
+    pub price:BigDecimal,
 }
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread with.
@@ -49,7 +51,7 @@ fn process_message(message:&ArrowDbMsg){
             tracing::debug!("[arrow_db] PING");
         },
         ArrowDbMsg::Log(msg)=>{
-            tracing::debug!("[arrow_db] LOG {:?}", &msg);
+            tracing::debug!("[arrow_db] POST {:?}", &msg);
             // tracing::debug!("[Coinbase::Ticker] {:?}", &t);
         },
         _ => tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message)
@@ -59,7 +61,7 @@ fn process_message(message:&ArrowDbMsg){
 
 pub fn start_heartbeat(tx: Sender<ArrowDbMsg>) -> JoinHandle<()> {
     std::thread::spawn(move ||{
-        let ticker = tick(Duration::from_millis(2000));
+        let ticker = tick(Duration::from_millis(PING_MS));
         loop{
             tx.send(ArrowDbMsg::Ping).unwrap();
             // tracing::debug!("[main] sending ping to arrow_db");
