@@ -21,7 +21,7 @@ tracing = "0.1.37"
 tracing-subscriber = {version = "0.3.16", features=[ "std", "registry", "env-filter", "fmt"]}
 strum={ version= "0.25.0", features=["derive"]}  # https://stackoverflow.com/questions/69015213/how-can-i-display-an-enum-in-lowercase
 strum_macros = "0.25.1"
-bigdecimal = {version = "0.4.1", features = ["serde"]}
+#bigdecimal = {version = "0.4.1", features = ["serde"]}
 chrono = { version = "0.4.1", features = ["serde"]}
 crossbeam = "0.8.0"
 tungstenite = {version = "0.20.0", features = ["native-tls"] }

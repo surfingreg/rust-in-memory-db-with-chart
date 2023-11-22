@@ -51,7 +51,8 @@ fn process_message(message:&Msg, _tx_db: Sender<ArrowDbMsg>){
             _tx_db.send(ArrowDbMsg::Log(PriceEvent{
                 dtg: msg.dtg.clone(),
                 product_id: msg.product_id.to_string(),
-                price: msg.price.clone(),
+                // price: msg.price.clone(),
+                price: msg.price,
             })).unwrap();
 
 

@@ -3,7 +3,6 @@
 use std::fmt::Debug;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use crossbeam_channel::{Sender, tick, unbounded};
 
@@ -26,7 +25,8 @@ pub enum ArrowDbMsg{
 pub struct PriceEvent{
     pub dtg:DateTime<Utc>,
     pub product_id:String,
-    pub price:BigDecimal,
+    // pub price:BigDecimal,
+    pub price:f64,
 }
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread with.

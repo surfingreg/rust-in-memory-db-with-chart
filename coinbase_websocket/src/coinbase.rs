@@ -1,6 +1,5 @@
 //! coinbase.rs
 
-
 use serde::{Deserialize};
 use common_lib::cb_ticker::Ticker;
 
@@ -13,8 +12,6 @@ pub enum Coinbase{
 	// L2Update,
 	// Snapshot,
 }
-
-
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]

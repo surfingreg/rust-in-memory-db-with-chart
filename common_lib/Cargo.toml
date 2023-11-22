@@ -12,6 +12,6 @@ strum={ version= "0.25.0", features=["derive"]}  # https://stackoverflow.com/que
 strum_macros = "0.25.1"
 crossbeam-channel = "0.5.8"
 serde = { version = "1.0.175", features = ["derive"] }
-bigdecimal = {version = "0.4.1", features = ["serde"]}
+#bigdecimal = {version = "0.4.1", features = ["serde"]}
 chrono = { version = "0.4.1", features = ["serde"]}
 
