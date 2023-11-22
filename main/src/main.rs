@@ -15,7 +15,6 @@ market_watcher:latest
 
 */
 
-
 use arrow_lib::arrow_db;
 use common_lib::init::init;
 use coinbase_websocket::websocket;

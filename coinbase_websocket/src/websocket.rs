@@ -14,13 +14,10 @@ use crate::coinbase::{Coinbase};
 
 /// Start a new thread listening to the coinbase websocket
 pub fn run(tx_operator:Sender<Msg>) -> JoinHandle<()> {
-
     tracing::debug!("[run] spawning websocket...");
-
     std::thread::spawn(move || {
         let _ws = ws_connect(tx_operator);
     })
-
 }
 
 /// The new thread listening to the coinbase websocket
