@@ -5,6 +5,12 @@ edition = "2021"
 
 [dependencies]
 common_lib = { path="../common_lib"}
+serde = { version = "1.0.175", features = ["derive"] }
 tracing = "0.1.37"
 crossbeam-channel = "0.5.8"
 chrono = { version = "0.4.1", features = ["serde"]}
+bounded-vec = "0.7.1"
+
+# apache arrow
+arrow = "44.0.0"
+arrow-schema = "44.0.0"
