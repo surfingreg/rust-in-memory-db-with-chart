@@ -1,45 +1,11 @@
 //! arrow_db.rs
 
-use std::ops::Deref;
-use std::sync::Arc;
-use arrow::array::{Array, Date64Array, Int32Array, PrimitiveArray};
-use arrow::datatypes::{ArrowPrimitiveType, Date64Type, Int64Type};
-use arrow::record_batch::RecordBatch;
-use arrow_schema::{DataType, Schema};
-use arrow_schema::DataType::Date64;
-use chrono::{DateTime, NaiveDateTime, Utc};
-use crossbeam_channel::{Sender, unbounded};
-use common_lib::cb_ticker::Ticker;
-use common_lib::heartbeat::start_heartbeat;
-use common_lib::operator::Msg;
-use serde::Serialize;
-
-
-#[derive(Serialize)]
-struct MyStruct {
-    int32: i32,
-    string: String,
-}
-
-/// spawn a thread to listen for messages; return the channel to communicate to this thread with.
-pub fn run() -> Sender<Msg> {
-    let (tx, rx) = unbounded();
-    let tx2 = tx.clone();
-    std::thread::spawn( move ||{
-        let _ = start_heartbeat(tx2);
-
-
-        // let schema = Schema::new(vec![
-        //     Field::new("int32", DataType::Int32, false),
-        //     Field::new("string", DataType::Utf8, false),
-        // ]);
-        //
-        // let rows = vec![
-        //     MyStruct{ int32: 5, string: "bar".to_string() },
-        //     MyStruct{ int32: 8, string: "foo".to_string() },
-        // ];
-        //
-
+/*
+        #[derive(Serialize)]
+        struct MyStruct {
+            int32: i32,
+            string: String,
+        }
         // aka i64
         let arrow_dates: Vec<<Date64Type as ArrowPrimitiveType>::Native> = vec![
             "2014-11-28T12:00:09Z".parse::<DateTime<Utc>>().unwrap().timestamp_millis(),
@@ -74,35 +40,140 @@ pub fn run() -> Sender<Msg> {
 
         // https://docs.rs/arrow/latest/arrow/record_batch/struct.RecordBatch.html
         let dates: &Date64Array = batch.column_by_name("dates").unwrap().as_any().downcast_ref::<Date64Array>().unwrap();
-
         for date in dates{
-
             for d in date{
-
-
                 let d:i64 = d as i64;
-
                 let d = NaiveDateTime::from_timestamp_millis(d).unwrap();
-
                 tracing::debug!("{:?}", d);
             }
+        }
+*/
 
-            // tracing::debug!("{:?}", &date);
 
-            // tracing::debug!("[arrow] batch: {:?}", chrono::NaiveDateTime::from_timestamp_millis(date as i64));
+use std::sync::Arc;
+use arrow::array::{Array, Date64Array, Float64Array, PrimitiveArray, StringArray};
+use arrow::datatypes::{Date64Type};
+use arrow::record_batch::RecordBatch;
+use arrow_schema::{ArrowError, DataType, Schema};
+use chrono::{NaiveDateTime};
+use crossbeam_channel::{Sender, unbounded};
+use common_lib::cb_ticker::{Ticker};
+use common_lib::heartbeat::start_heartbeat;
+use common_lib::operator::Msg;
+use serde::Serialize;
+use slice_ring_buffer::SliceRingBuffer;
+
+// TODO: consider arc/mutex vice serial message parsing
+/// fixed-size ring buffer with ability to extract the entire buffer as a slice
+/// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
+pub struct EventLog{
+    // log:Vec<Ticker>
+    log: SliceRingBuffer<Ticker>
+}
+
+impl EventLog{
+    fn new()->EventLog{
+        EventLog{
+            log:SliceRingBuffer::<Ticker>::with_capacity(100),
+            // log:vec![]
+        }
+    }
+
+    fn push(&mut self, ticker:&Ticker)->Result<(), EventLogError>{
+        self.log.push_back((*ticker).clone());
+        Ok(())
+    }
+
+    fn schema() -> Schema {
+        let schema = Schema::new(vec![
+            arrow_schema::Field::new("dtg", DataType::Date64, false),
+            arrow_schema::Field::new("product_id", DataType::Utf8, false),
+            arrow_schema::Field::new("price", DataType::Float64, false),
+        ]);
+        schema
+    }
+
+    fn record_batch(&self) -> Result<RecordBatch, ArrowError> {
+        let dates:Vec<i64> = self.log.iter().map(|x| x.dtg.timestamp_millis()).collect();
+        let dates:PrimitiveArray<Date64Type> = Date64Array::from(dates);
+        let product_ids:Vec<String> = self.log.iter().map(|x| (x.product_id.to_string()).clone()).collect();
+        let product_ids:StringArray = StringArray::from(product_ids);
+        let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
+        let prices:Float64Array = Float64Array::from(prices);
+
+        RecordBatch::try_new(
+            Arc::new(EventLog::schema()),
+            vec![
+                Arc::new(dates),
+                Arc::new(product_ids),
+                Arc::new(prices),
+            ]
+        )
+    }
+
+    fn print_record_batch(&self){
+        // https://docs.rs/arrow/latest/arrow/record_batch/struct.RecordBatch.html
+
+        match self.record_batch(){
+            Ok(batch)=> {
+                tracing::debug!("[print_record_batch] rows: {}", batch.num_rows());
+                let dates: &Date64Array = batch.column_by_name("dtg").unwrap().as_any().downcast_ref::<Date64Array>().unwrap();
+                for date in dates {
+                    for d in date {
+                        let d: i64 = d as i64;
+                        let d = NaiveDateTime::from_timestamp_millis(d).unwrap();
+                        tracing::debug!("[print_record_batch] {:?}", d);
+                    }
+                }
+            },
+            Err(e)=>{
+                tracing::debug!("[print_record_batch] error: {:?}", &e);
+            }
 
         }
+    }
+}
+
+pub enum EventLogError{
+    PushError,
+    OtherError,
+}
 
 
+/// spawn a thread to listen for messages; return the channel to communicate to this thread with.
+pub fn run() -> Sender<Msg> {
+    let (tx, rx) = unbounded();
 
+    let mut event_log = EventLog::new();
+
+    let tx2 = tx.clone();
+    std::thread::spawn(move || {
+        let _ = start_heartbeat(tx2);
 
         // state holder v1
-        let mut message_vec:Vec<Ticker> = vec![];
+        // let mut message_vec:Vec<Ticker> = vec![];
+        // let state_ref = &mut message_vec;
 
-        let state_ref = &mut message_vec;
         loop{
             match rx.recv(){
-                Ok(message)=> process_message(message, state_ref),
+                Ok(message)=> {
+                    // process_message(message, state_ref)
+                    match message{
+                        Msg::Ping => {
+                            tracing::debug!("[arrow_db] PING");
+                        },
+                        Msg::Post(ticker)=>{
+                            tracing::debug!("[arrow_db] POST {:?}", &ticker);
+
+                            event_log.log.push_back(ticker.clone());
+                            event_log.print_record_batch();
+
+                            // state_ref.push(ticker);
+                            // tracing::debug!("[arrow_db] total in memory: {}", state_ref.len());
+                        },
+                        _ => tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message)
+                    }
+                },
                 Err(e)=> tracing::debug!("[arrow_db] error {:?}", &e),
             }
         }

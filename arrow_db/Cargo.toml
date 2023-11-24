@@ -14,3 +14,6 @@ bounded-vec = "0.7.1"
 # apache arrow
 arrow = "44.0.0"
 arrow-schema = "44.0.0"
+
+# https://docs.rs/slice-ring-buffer/latest/src/slice_ring_buffer/lib.rs.html#1-5977
+slice-ring-buffer = "0.3.2"
