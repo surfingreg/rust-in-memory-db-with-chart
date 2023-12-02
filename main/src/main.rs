@@ -20,12 +20,13 @@ use common_lib::init::init;
 use coinbase_websocket::websocket;
 use common_lib::operator;
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	// general logging stuff I always do
 	init(env!("CARGO_MANIFEST_DIR"));
 
 	// database thread
-	let tx_db = arrow_db::run();
+	let tx_db = arrow_db::run().await;
 
 	// operator thread
 	let tx_operator = operator::run(tx_db);

@@ -14,7 +14,6 @@ pub struct Ticker{
     #[serde(rename="time")]
     pub dtg:DateTime<Utc>,
     pub product_id:ProductId,
-    // pub price:BigDecimal,
     #[serde(deserialize_with="f64_from_str")]
     pub price:f64,
 }
