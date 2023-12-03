@@ -40,7 +40,14 @@ async fn process_message(message:Msg, event_log: &mut EventLog){
 
             // event_log._print_record_batch();
             let count = event_log.sql_count_all().await.unwrap();
-            count.show().await;
+            match count.show().await{
+                Ok(_)=>{
+
+                },
+                Err(e)=>{
+                    tracing::error!("[process_message] sql_count error: {:?}", e);
+                }
+            }
 
 
         },

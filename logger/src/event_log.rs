@@ -36,7 +36,8 @@ impl EventLog{
 
     /// push into this custom event log
     pub fn push(&mut self, ticker:&Ticker)->Result<(), EventLogError>{
-        self.log.push_back((*ticker).clone());
+        // self.log.push_back((*ticker).clone());
+        self.log.push_front((*ticker).clone());
         Ok(())
     }
 
@@ -89,28 +90,18 @@ impl EventLog{
         let mem_batch = self.record_batch().unwrap();
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
-        /*
-
-        works:
-            select
-                count(*) as count
-                ,(select avg(price) from (select price from t_one limit 100)) as p100
-                ,(select avg(price) from (select price from t_one limit 10)) as p10
-            from t_one
-
-
-
-         */
 
 
         let df = ctx.sql(r#"
-            select count, p100, p10, p100-p10 as diff from (
-                select
-                    count(*) as count
-                    ,(select avg(price) from (select price from t_one limit 100)) as p100
-                    ,(select avg(price) from (select price from t_one limit 10)) as p10
-                from t_one
-            )
+                select price_no_order, price_ordered, p4, p10, p4-p10 as diff, count from(
+                    select
+                        (select price from t_one limit 1) as price_no_order
+                        ,(select price from t_one order by dtg desc limit 1) as price_ordered
+                        ,(select avg(price) from (select * from t_one order by dtg desc limit 4)) as p4
+                        ,(select avg(price) from (select * from t_one order by dtg desc limit 10)) as p10
+                        ,(select count(*) from t_one) as count
+                )
+
         "#
         ).await?;
 
