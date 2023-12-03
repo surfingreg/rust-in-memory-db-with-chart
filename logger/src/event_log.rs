@@ -90,11 +90,18 @@ impl EventLog{
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
         let df = ctx.sql(r#"
-            select count(*) as count, avg(price) as price_avg from t_one
+                select count, p100, p10, p100-p10 as diff from (
+                    select
+                        count(*) as count
+                        ,(select avg(price) from (select price from t_one order by dtg desc limit 100)) as p100
+                        ,(select avg(price) from (select price from t_one order by dtg desc limit 10)) as p10
+                    from t_one
+                )
         "#
         ).await?;
 
-        tracing::debug!("[sql] elapsed: {} µs", start.elapsed().as_micros());
+        // µs
+        tracing::debug!("[sql] elapsed: {} ms", start.elapsed().as_micros() as f64/1000.0);
 
         Ok(df.clone())
 
