@@ -35,11 +35,12 @@ async fn process_message(message:Msg, event_log: &mut EventLog){
         },
         Msg::Post(ticker)=>{
             tracing::debug!("[arrow_db] POST {:?}", &ticker);
+
             let _ = event_log.push(&ticker);
 
             // event_log._print_record_batch();
             let count = event_log.sql_count_all().await.unwrap();
-            let _ = count.show().await;
+            count.show().await;
 
 
         },

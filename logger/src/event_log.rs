@@ -89,14 +89,28 @@ impl EventLog{
         let mem_batch = self.record_batch().unwrap();
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
+        /*
+
+        works:
+            select
+                count(*) as count
+                ,(select avg(price) from (select price from t_one limit 100)) as p100
+                ,(select avg(price) from (select price from t_one limit 10)) as p10
+            from t_one
+
+
+
+         */
+
+
         let df = ctx.sql(r#"
-                select count, p100, p10, p100-p10 as diff from (
-                    select
-                        count(*) as count
-                        ,(select avg(price) from (select price from t_one order by dtg desc limit 100)) as p100
-                        ,(select avg(price) from (select price from t_one order by dtg desc limit 10)) as p10
-                    from t_one
-                )
+            select count, p100, p10, p100-p10 as diff from (
+                select
+                    count(*) as count
+                    ,(select avg(price) from (select price from t_one limit 100)) as p100
+                    ,(select avg(price) from (select price from t_one limit 10)) as p10
+                from t_one
+            )
         "#
         ).await?;
 
