@@ -83,14 +83,13 @@ impl EventLog{
 
     }
 
+    /// Perform calculations on the in-memory data using DataFusion's SQL
     /// select * from table
-    pub async fn sql_count_all(&self) -> datafusion::error::Result<DataFrame> {
+    pub async fn calc_with_sql(&self) -> datafusion::error::Result<DataFrame> {
         let start = Instant::now();
-
         let mem_batch = self.record_batch().unwrap();
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
-
 
         let df = ctx.sql(r#"
                 select price_no_order, price_ordered, p4, p10, p4-p10 as diff, count from(
@@ -105,12 +104,50 @@ impl EventLog{
         "#
         ).await?;
 
-        // µs
+        // milliseconds elapsed
         tracing::debug!("[sql] elapsed: {} ms", start.elapsed().as_micros() as f64/1000.0);
 
         Ok(df.clone())
 
     }
+
+    /// Do the same thing as the SQL just without the overhead of DataFusion. Is it significantly faster? Or at all?
+    pub fn calc_raw(&self) {
+        let start = Instant::now();
+
+        let avg_4 = self.avg_recent_n(4);
+        let avg_10 = self.avg_recent_n(10);
+
+        tracing::debug!("[without_sql_calculation] avg_4: {}, avg_10: {}, diff: {}, count: {}", avg_4, avg_10, avg_4-avg_10, self.log.len() );
+
+        tracing::debug!("[without sql] elapsed: {} ms", start.elapsed().as_micros() as f64/1000.0);
+
+    }
+
+    fn avg_recent_n(&self, n:usize)->f64{
+        // len should be 10
+
+        let slice_max = n;
+
+        // use len if len is less than max slice
+        let slice_max = if self.log.len() < slice_max {
+            self.log.len()
+        } else {
+            slice_max
+        };
+
+        let slice_4:&[Ticker] = &self.log.as_slice()[0..slice_max];
+        assert_eq!(slice_max, slice_4.len());
+
+        let avg_4:f64 = slice_4.iter().map(|x| {x.price}).sum::<f64>() / slice_4.len() as f64;
+
+        //.sum::<f64>() / slice_4.len();
+        // println!("[without_sql_calculation] avg_4: {}", &avg_4);
+
+        avg_4
+
+    }
+
 
     /// FYI: DataFusion doesn't by default print chrono DateTimes with the time
     pub fn _print_record_batch(&self){
