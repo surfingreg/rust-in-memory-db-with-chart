@@ -6,6 +6,7 @@
 //!
 
 use std::sync::Arc;
+use std::time::Instant;
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
 use datafusion::arrow::error::ArrowError;
@@ -83,13 +84,17 @@ impl EventLog{
 
     /// select * from table
     pub async fn sql_count_all(&self) -> datafusion::error::Result<DataFrame> {
+        let start = Instant::now();
+
         let mem_batch = self.record_batch().unwrap();
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
         let df = ctx.sql(r#"
-            select count(*) from t_one
+            select count(*) as count, avg(price) as price_avg from t_one
         "#
         ).await?;
+
+        tracing::debug!("[sql] elapsed: {} µs", start.elapsed().as_micros());
 
         Ok(df.clone())
 
