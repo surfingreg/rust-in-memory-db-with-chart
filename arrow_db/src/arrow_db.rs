@@ -53,8 +53,12 @@ async fn process_message(message:Msg, event_log: &mut Arc<Mutex<EventLog>>){
 
             // same calculation without DataFusion/SQL takes .02 milliseconds (100x faster)
             event_log.calc_curve_diff(4, 100);
-            event_log.calc_curve_diff(4, 1000);
-            event_log.calc_curve_diff(100, 1000);
+            event_log.calc_curve_diff(4, 300);
+            event_log.calc_curve_diff(4, 500);
+            event_log.calc_curve_diff(20, 100);
+            event_log.calc_curve_diff(20, 300);
+            event_log.calc_curve_diff(20
+                                      , 500);
             println!("\n");
 
         },
