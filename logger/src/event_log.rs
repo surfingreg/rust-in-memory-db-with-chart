@@ -5,7 +5,8 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
@@ -16,54 +17,125 @@ use datafusion::prelude::*;
 use slice_ring_buffer::SliceRingBuffer;
 use common_lib::cb_ticker::{Ticker};
 
+/// Container for multiple event logs keyed by a string
+pub struct EventBook {
+    pub book:Arc<RwLock<HashMap<String, EventLog>>>
+}
+
+impl EventBook {
+    pub fn new() -> EventBook {
+        EventBook {
+            book:Arc::new(RwLock::new(HashMap::<String, EventLog>::new()))
+        }
+    }
+
+    /// get write lock on the entire book and insert a new record
+    pub fn push(&self, key:&str, val:&Ticker)->Result<(), BookError>{
+
+        // write lock
+        let mut book_writable = self.book.write().unwrap();
+
+        match book_writable.get_mut(key) {
+            Some(event_log) => {
+
+                // an event log exists for this key
+
+                // TODO un-unwrap
+                let _ = event_log.push(val).unwrap();
+                Ok(())
+            },
+            None => {
+
+                // an event log does not exist for this key; create it
+
+                // 1. create a new event log since there's none for this key
+                let mut new_e_log = EventLog::new();
+                // 2. put the ticker in the new event log
+                new_e_log.push(val).unwrap();
+                match new_e_log.push(val){
+                    Ok(_)=>{
+                        // 3. put the new event log with new ticker in the hashmap
+                        // Option<previous> or none returned
+                        book_writable.insert(key.to_string(), new_e_log);
+                        Ok(())
+                    },
+                    Err(e)=>{
+                        tracing::error!("[push] event log push error: {:?}", &e);
+                        Err(BookError::General)
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum BookError{
+    General
+}
+
+
+
+
+
+
+
+
 #[allow(dead_code)]
 const RING_BUF_SIZE:usize=100;
 
 /// Ring buffer with ability to extract the entire buffer as a slice
 /// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
 pub struct EventLog{
-    log: Arc<RwLock<SliceRingBuffer<Ticker>>>
+    // log: Arc<RwLock<SliceRingBuffer<Ticker>>>
+    log: SliceRingBuffer<Ticker>
 }
 
 #[allow(dead_code)]
 impl EventLog{
-    pub fn new()->EventLog{
+    pub fn new() -> EventLog{
         EventLog{
-            log: Arc::new(RwLock::new(SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE))),
+            // log: Arc::new(RwLock::new(SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE))),
+            log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE)
         }
     }
 
     // TODO: unwrap
     pub fn len(&self)->usize{
-        self.read().unwrap().len()
+        // self.read().unwrap().len()
+        self.log.len()
     }
 
-    pub fn read(&self) -> Result<RwLockReadGuard<SliceRingBuffer<Ticker>>, EventLogError> {
-        match self.log.read(){
-            Ok(x) => Ok(x),
-            Err(_e)=> Err(EventLogError::ReadLockError),
-        }
-    }
-
-    pub fn write(&self) -> Result<RwLockWriteGuard<SliceRingBuffer<Ticker>>, EventLogError> {
-        match self.log.write(){
-            Ok(x) => Ok(x),
-            Err(_e)=> Err(EventLogError::WriteLockError),
-        }
-    }
+    // pub fn read(&self) -> Result<RwLockReadGuard<SliceRingBuffer<Ticker>>, EventLogError> {
+    //     match self.log.read(){
+    //         Ok(x) => Ok(x),
+    //         Err(_e)=> Err(EventLogError::ReadLockError),
+    //     }
+    // }
+    //
+    // pub fn write(&self) -> Result<RwLockWriteGuard<SliceRingBuffer<Ticker>>, EventLogError> {
+    //     match self.log.write(){
+    //         Ok(x) => Ok(x),
+    //         Err(_e)=> Err(EventLogError::WriteLockError),
+    //     }
+    // }
 
     /// push into this custom event log; thread safe
     pub fn push(&mut self, ticker:&Ticker)->Result<(), EventLogError> {
-        match self.write() {
-            Ok(mut log_writable) => {
-                log_writable.push_front((*ticker).clone());
-                Ok(())
-            }
-            Err(e) => {
-                tracing::error!("[push] lock error: {:?}", &e);
-                return Err(EventLogError::PushError);
-            },
-        }
+
+        self.log.push_front((*ticker).clone());
+        Ok(())
+
+        // match self.write() {
+        //     Ok(mut log_writable) => {
+        //         log_writable.push_front((*ticker).clone());
+        //         Ok(())
+        //     }
+        //     Err(e) => {
+        //         tracing::error!("[push] lock error: {:?}", &e);
+        //         return Err(EventLogError::PushError);
+        //     },
+        // }
     }
 
     pub fn schema() -> Schema {
@@ -83,16 +155,16 @@ impl EventLog{
         {
             // lock inside closure to end lock asap
             // TODO: unwrap
-            match self.read(){
-                Ok(log_readable)=>{
-                    dates = log_readable.iter().map(|x| x.dtg.timestamp_millis()).collect();
-                    product_ids = log_readable.iter().map(|x| (x.product_id.to_string()).clone()).collect();
-                    prices = log_readable.iter().map(|x| x.price).collect();
-                },
-                Err(e)=>{
-                    return Err(e);
-                }
-            };
+            // match self.read(){
+            //     Ok(log_readable)=>{
+                    dates = self.log.iter().map(|x| x.dtg.timestamp_millis()).collect();
+                    product_ids = self.log.iter().map(|x| (x.product_id.to_string()).clone()).collect();
+                    prices = self.log.iter().map(|x| x.price).collect();
+            //     },
+            //     Err(e)=>{
+            //         return Err(e);
+            //     }
+            // };
         }
 
         let dates:PrimitiveArray<Date64Type> = Date64Array::from(dates);
@@ -109,8 +181,6 @@ impl EventLog{
         ){
             Ok(x)=>Ok(x),
             Err(_e)=>Err(EventLogError::ArrowError)
-
-
         }
     }
 
@@ -187,15 +257,15 @@ impl EventLog{
         };
 
         // read lock, may not necessarily be perfectly current
-        match  self.read(){
-            Ok(log_readable) =>{
-                let slice_4:&[Ticker] = &log_readable.as_slice()[0..slice_max];
+        // match  self.read(){
+        //     Ok(log_readable) =>{
+                let slice_4:&[Ticker] = &self.log.as_slice()[0..slice_max];
                 assert_eq!(slice_max, slice_4.len());
                 let avg_4:f64 = slice_4.iter().map(|x| {x.price}).sum::<f64>() / slice_4.len() as f64;
                 Ok(avg_4)
-            },
-            Err(e)=> Err(e)
-        }
+        //     },
+        //     Err(e)=> Err(e)
+        // }
     }
 
     /// FYI: DataFusion doesn't by default print chrono DateTimes with the time
