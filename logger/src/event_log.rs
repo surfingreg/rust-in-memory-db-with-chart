@@ -111,16 +111,20 @@ impl EventLog{
 
     }
 
-    /// Do the same thing as the SQL just without the overhead of DataFusion. Is it significantly faster? Or at all?
-    pub fn calc_raw(&self) {
+    /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
+    pub fn calc_curve_diff(&self, curve_n0:usize, curve_n1:usize) {
         let start = Instant::now();
+        let avg_0 = self.avg_recent_n(curve_n0);
+        let avg_1 = self.avg_recent_n(curve_n1);
+        let diff = avg_0-avg_1;
+        let graphic = match diff {
+            d if d >= 0.0 => "+++++",
+            d if d < 0.0 => "-----",
+            _ => "-----"
+        };
 
-        let avg_4 = self.avg_recent_n(4);
-        let avg_10 = self.avg_recent_n(10);
+        tracing::debug!("[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms", curve_n0, curve_n1, diff, curve_n0, avg_0, curve_n1, avg_1, self.log.len(), start.elapsed().as_micros() as f64/1000.0);
 
-        tracing::debug!("[without_sql_calculation] avg_4: {}, avg_10: {}, diff: {}, count: {}", avg_4, avg_10, avg_4-avg_10, self.log.len() );
-
-        tracing::debug!("[without sql] elapsed: {} ms", start.elapsed().as_micros() as f64/1000.0);
 
     }
 

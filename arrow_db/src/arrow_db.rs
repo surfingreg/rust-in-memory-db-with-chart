@@ -1,5 +1,6 @@
 //! arrow_db.rs
 
+use std::sync::{Arc, Mutex};
 use crossbeam_channel::{Sender, unbounded};
 use common_lib::heartbeat::start_heartbeat;
 use common_lib::operator::Msg;
@@ -10,7 +11,7 @@ use logger::event_log::EventLog;
 pub async fn run() -> Sender<Msg> {
     let (tx, rx) = unbounded();
 
-    let mut event_log = EventLog::new();
+    let event_log = Arc::new(Mutex::new(EventLog::new()));
 
     let tx2 = tx.clone();
     tokio::spawn(async move {
@@ -19,7 +20,12 @@ pub async fn run() -> Sender<Msg> {
         loop{
             match rx.recv(){
                 Ok(message)=> {
-                    process_message(message, &mut event_log).await;
+                    let mut event_log = event_log.clone();
+
+                    // new thread to prevent processing blocking the websocket
+                    tokio::spawn(async move {
+                        process_message(message, &mut event_log).await;
+                    });
                 },
                 Err(e)=> tracing::debug!("[arrow_db] error {:?}", &e),
             }
@@ -28,25 +34,28 @@ pub async fn run() -> Sender<Msg> {
     tx
 }
 
-async fn process_message(message:Msg, event_log: &mut EventLog){
+/// Run this in another thread in response to a websocket packet.
+async fn process_message(message:Msg, event_log: &mut Arc<Mutex<EventLog>>){
     match message{
         Msg::Ping => {
             tracing::debug!("[arrow_db] PING");
         },
         Msg::Post(ticker)=>{
-            tracing::debug!("[arrow_db] POST {:?}", &ticker);
-
+            let mut event_log = event_log.lock().unwrap();
             let _ = event_log.push(&ticker);
+            tracing::debug!("[arrow_db] POST {:?}", &ticker);
+            // this take 1-5 milliseconds
+            // let count = event_log.calc_with_sql().await.unwrap();
+            //
+            // if let Err(e) = count.show().await{
+            //     tracing::error!("[process_message] sql_count error: {:?}", e);
+            // }
 
-            // event_log._print_record_batch();
-            let count = event_log.calc_with_sql().await.unwrap();
-
-            if let Err(e) = count.show().await{
-                tracing::error!("[process_message] sql_count error: {:?}", e);
-            }
-
-            event_log.calc_raw();
-
+            // same calculation without DataFusion/SQL takes .02 milliseconds (100x faster)
+            event_log.calc_curve_diff(4, 100);
+            event_log.calc_curve_diff(4, 1000);
+            event_log.calc_curve_diff(100, 1000);
+            println!("\n");
 
         },
         _ => tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message)
