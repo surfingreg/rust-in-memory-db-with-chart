@@ -5,11 +5,10 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Instant;
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
-use datafusion::arrow::error::ArrowError;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::dataframe::DataFrameWriteOptions;
@@ -31,13 +30,31 @@ impl EventLog{
     pub fn new()->EventLog{
         EventLog{
             log: Arc::new(RwLock::new(SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE))),
-            // log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
+        }
+    }
+
+    // TODO: unwrap
+    pub fn len(&self)->usize{
+        self.read().unwrap().len()
+    }
+
+    pub fn read(&self) -> Result<RwLockReadGuard<SliceRingBuffer<Ticker>>, EventLogError> {
+        match self.log.read(){
+            Ok(x) => Ok(x),
+            Err(_e)=> Err(EventLogError::ReadLockError),
+        }
+    }
+
+    pub fn write(&self) -> Result<RwLockWriteGuard<SliceRingBuffer<Ticker>>, EventLogError> {
+        match self.log.write(){
+            Ok(x) => Ok(x),
+            Err(_e)=> Err(EventLogError::WriteLockError),
         }
     }
 
     /// push into this custom event log; thread safe
     pub fn push(&mut self, ticker:&Ticker)->Result<(), EventLogError> {
-        match self.log.write() {
+        match self.write() {
             Ok(mut log_writable) => {
                 log_writable.push_front((*ticker).clone());
                 Ok(())
@@ -59,31 +76,42 @@ impl EventLog{
     }
 
     /// hacked over from a coinbase websocket stream, hence the product id and price fields
-    pub fn record_batch(&self) -> Result<RecordBatch, ArrowError> {
+    pub fn record_batch(&self) -> Result<RecordBatch, EventLogError> {
         let dates: Vec<i64>;
         let product_ids: Vec<String>;
         let prices:Vec<f64>;
         {
-            // put the lock inside a closure so it goes out of scope (unlocks) as soon as possible
+            // lock inside closure to end lock asap
             // TODO: unwrap
-            let log_readable = self.log.read().unwrap();
-            dates = log_readable.iter().map(|x| x.dtg.timestamp_millis()).collect();
-            product_ids = log_readable.iter().map(|x| (x.product_id.to_string()).clone()).collect();
-            prices = log_readable.iter().map(|x| x.price).collect();
+            match self.read(){
+                Ok(log_readable)=>{
+                    dates = log_readable.iter().map(|x| x.dtg.timestamp_millis()).collect();
+                    product_ids = log_readable.iter().map(|x| (x.product_id.to_string()).clone()).collect();
+                    prices = log_readable.iter().map(|x| x.price).collect();
+                },
+                Err(e)=>{
+                    return Err(e);
+                }
+            };
         }
 
         let dates:PrimitiveArray<Date64Type> = Date64Array::from(dates);
         let product_ids:StringArray = StringArray::from(product_ids);
         let prices:Float64Array = Float64Array::from(prices);
 
-        RecordBatch::try_new(
+        match RecordBatch::try_new(
             Arc::new(EventLog::schema()),
             vec![
                 Arc::new(dates),
                 Arc::new(product_ids),
                 Arc::new(prices),
             ]
-        )
+        ){
+            Ok(x)=>Ok(x),
+            Err(_e)=>Err(EventLogError::ArrowError)
+
+
+        }
     }
 
     /// select * from table
@@ -122,7 +150,6 @@ impl EventLog{
 
         // milliseconds elapsed
         tracing::debug!("[sql] elapsed: {} ms", start.elapsed().as_micros() as f64/1000.0);
-
         Ok(df.clone())
 
     }
@@ -130,8 +157,8 @@ impl EventLog{
     /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
     pub fn calc_curve_diff(&self, curve_n0:usize, curve_n1:usize) {
         let start = Instant::now();
-        let avg_0 = self.avg_recent_n(curve_n0);
-        let avg_1 = self.avg_recent_n(curve_n1);
+        let avg_0 = self.avg_recent_n(curve_n0).unwrap();
+        let avg_1 = self.avg_recent_n(curve_n1).unwrap();
         let diff = avg_0-avg_1;
         let graphic = match diff {
             d if d >= 0.0 => "+++++",
@@ -142,18 +169,13 @@ impl EventLog{
         let log_count = self.len();
         tracing::debug!("[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms", curve_n0, curve_n1, diff, curve_n0, avg_0, curve_n1, avg_1, log_count, start.elapsed().as_micros() as f64/1000.0);
 
-
     }
 
 
-    // TODO: unwrap
-    fn len(&self)->usize{
-        self.log.read().unwrap().len()
-    }
 
     /// Compute the average of the last N prices
     /// Uses an RwLock
-    fn avg_recent_n(&self, n:usize) -> f64 {
+    fn avg_recent_n(&self, n:usize) -> Result<f64, EventLogError> {
         let slice_max = n;
 
         // use len if len is less than max slice
@@ -165,15 +187,16 @@ impl EventLog{
         };
 
         // read lock, may not necessarily be perfectly current
-        let log_readable = self.log.read().unwrap();
-        let slice_4:&[Ticker] = &log_readable.as_slice()[0..slice_max];
-        assert_eq!(slice_max, slice_4.len());
-        let avg_4:f64 = slice_4.iter().map(|x| {x.price}).sum::<f64>() / slice_4.len() as f64;
-
-        avg_4
-
+        match  self.read(){
+            Ok(log_readable) =>{
+                let slice_4:&[Ticker] = &log_readable.as_slice()[0..slice_max];
+                assert_eq!(slice_max, slice_4.len());
+                let avg_4:f64 = slice_4.iter().map(|x| {x.price}).sum::<f64>() / slice_4.len() as f64;
+                Ok(avg_4)
+            },
+            Err(e)=> Err(e)
+        }
     }
-
 
     /// FYI: DataFusion doesn't by default print chrono DateTimes with the time
     pub fn _print_record_batch(&self){
@@ -215,9 +238,13 @@ impl EventLog{
 
 /// Not used
 #[allow(dead_code)]
+#[derive(Debug)]
 pub enum EventLogError {
     PushError,
+    ReadLockError,
+    WriteLockError,
     OtherError,
+    ArrowError,
 }
 
 #[cfg(test)]
