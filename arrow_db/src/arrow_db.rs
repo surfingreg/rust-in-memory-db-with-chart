@@ -41,9 +41,12 @@ async fn process_message(message:Msg, event_log: &mut Arc<Mutex<EventLog>>){
             tracing::debug!("[arrow_db] PING");
         },
         Msg::Post(ticker)=>{
+
+            // lock for the duration of this closure
             let mut event_log = event_log.lock().unwrap();
             let _ = event_log.push(&ticker);
             tracing::debug!("[arrow_db] POST {:?}", &ticker);
+
             // this take 1-5 milliseconds
             // let count = event_log.calc_with_sql().await.unwrap();
             //

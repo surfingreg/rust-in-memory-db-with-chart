@@ -5,7 +5,7 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
@@ -23,22 +23,30 @@ const RING_BUF_SIZE:usize=100;
 /// Ring buffer with ability to extract the entire buffer as a slice
 /// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
 pub struct EventLog{
-    log: SliceRingBuffer<Ticker>
+    log: Arc<RwLock<SliceRingBuffer<Ticker>>>
 }
 
 #[allow(dead_code)]
 impl EventLog{
     pub fn new()->EventLog{
         EventLog{
-            log:SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
+            log: Arc::new(RwLock::new(SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE))),
+            // log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
         }
     }
 
-    /// push into this custom event log
-    pub fn push(&mut self, ticker:&Ticker)->Result<(), EventLogError>{
-        // self.log.push_back((*ticker).clone());
-        self.log.push_front((*ticker).clone());
-        Ok(())
+    /// push into this custom event log; thread safe
+    pub fn push(&mut self, ticker:&Ticker)->Result<(), EventLogError> {
+        match self.log.write() {
+            Ok(mut log_writable) => {
+                log_writable.push_front((*ticker).clone());
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("[push] lock error: {:?}", &e);
+                return Err(EventLogError::PushError);
+            },
+        }
     }
 
     pub fn schema() -> Schema {
@@ -52,11 +60,20 @@ impl EventLog{
 
     /// hacked over from a coinbase websocket stream, hence the product id and price fields
     pub fn record_batch(&self) -> Result<RecordBatch, ArrowError> {
-        let dates:Vec<i64> = self.log.iter().map(|x| x.dtg.timestamp_millis()).collect();
+        let dates: Vec<i64>;
+        let product_ids: Vec<String>;
+        let prices:Vec<f64>;
+        {
+            // put the lock inside a closure so it goes out of scope (unlocks) as soon as possible
+            // TODO: unwrap
+            let log_readable = self.log.read().unwrap();
+            dates = log_readable.iter().map(|x| x.dtg.timestamp_millis()).collect();
+            product_ids = log_readable.iter().map(|x| (x.product_id.to_string()).clone()).collect();
+            prices = log_readable.iter().map(|x| x.price).collect();
+        }
+
         let dates:PrimitiveArray<Date64Type> = Date64Array::from(dates);
-        let product_ids:Vec<String> = self.log.iter().map(|x| (x.product_id.to_string()).clone()).collect();
         let product_ids:StringArray = StringArray::from(product_ids);
-        let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
         let prices:Float64Array = Float64Array::from(prices);
 
         RecordBatch::try_new(
@@ -92,15 +109,14 @@ impl EventLog{
         ctx.register_batch("t_one", mem_batch).unwrap();
 
         let df = ctx.sql(r#"
-                select price_no_order, price_ordered, p4, p10, p4-p10 as diff, count from(
-                    select
-                        (select price from t_one limit 1) as price_no_order
-                        ,(select price from t_one order by dtg desc limit 1) as price_ordered
-                        ,(select avg(price) from (select * from t_one order by dtg desc limit 4)) as p4
-                        ,(select avg(price) from (select * from t_one order by dtg desc limit 10)) as p10
-                        ,(select count(*) from t_one) as count
-                )
-
+            select price_no_order, price_ordered, p4, p10, p4-p10 as diff, count from(
+                select
+                    (select price from t_one limit 1) as price_no_order
+                    ,(select price from t_one order by dtg desc limit 1) as price_ordered
+                    ,(select avg(price) from (select * from t_one order by dtg desc limit 4)) as p4
+                    ,(select avg(price) from (select * from t_one order by dtg desc limit 10)) as p10
+                    ,(select count(*) from t_one) as count
+            )
         "#
         ).await?;
 
@@ -123,30 +139,36 @@ impl EventLog{
             _ => "-----"
         };
 
-        tracing::debug!("[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms", curve_n0, curve_n1, diff, curve_n0, avg_0, curve_n1, avg_1, self.log.len(), start.elapsed().as_micros() as f64/1000.0);
+        let log_count = self.len();
+        tracing::debug!("[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms", curve_n0, curve_n1, diff, curve_n0, avg_0, curve_n1, avg_1, log_count, start.elapsed().as_micros() as f64/1000.0);
 
 
     }
 
-    fn avg_recent_n(&self, n:usize)->f64{
-        // len should be 10
 
+    // TODO: unwrap
+    fn len(&self)->usize{
+        self.log.read().unwrap().len()
+    }
+
+    /// Compute the average of the last N prices
+    /// Uses an RwLock
+    fn avg_recent_n(&self, n:usize) -> f64 {
         let slice_max = n;
 
         // use len if len is less than max slice
-        let slice_max = if self.log.len() < slice_max {
-            self.log.len()
+        let log_count = self.len();
+        let slice_max = if log_count < slice_max {
+            log_count
         } else {
             slice_max
         };
 
-        let slice_4:&[Ticker] = &self.log.as_slice()[0..slice_max];
+        // read lock, may not necessarily be perfectly current
+        let log_readable = self.log.read().unwrap();
+        let slice_4:&[Ticker] = &log_readable.as_slice()[0..slice_max];
         assert_eq!(slice_max, slice_4.len());
-
         let avg_4:f64 = slice_4.iter().map(|x| {x.price}).sum::<f64>() / slice_4.len() as f64;
-
-        //.sum::<f64>() / slice_4.len();
-        // println!("[without_sql_calculation] avg_4: {}", &avg_4);
 
         avg_4
 
