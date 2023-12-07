@@ -12,6 +12,9 @@ path="src/main.rs"
 tokio = "1.29.1"
 arrow_lib = { path ="../arrow_db"}
 common_lib = { path="../common_lib"}
+visual = { path="../visual"}
+
+
 coinbase_websocket = { path="../coinbase_websocket"}
 dotenvy = "0.15.6"
 tracing = "0.1.37"

@@ -190,7 +190,7 @@ impl EventLog{
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
         let df = ctx.sql(r#"
-            select * from t_one
+            select * from t_one order by dtg
         "#
         ).await?;
 
@@ -201,6 +201,7 @@ impl EventLog{
     /// Perform calculations on the in-memory data using DataFusion's SQL
     /// select * from table
     pub async fn calc_with_sql(&self) -> datafusion::error::Result<DataFrame> {
+
         let start = Instant::now();
         let mem_batch = self.record_batch().unwrap();
         let ctx = SessionContext::new();
@@ -286,7 +287,6 @@ impl EventLog{
     pub async fn write_csv(&self){
         let df = self.query_sql_all().await.unwrap();
         df.write_csv("tests/data/output", DataFrameWriteOptions::new(), None).await.unwrap();
-
     }
 
     /// Query a CSV file using SQL. Pasted straight out of the Datafusion docs.
@@ -334,11 +334,12 @@ mod tests{
             product_id: ProductId::BtcUsd,
             price: 88.87,
         });
-        let _ = e_log.push(&Ticker{
-            dtg: d1,
-            product_id: ProductId::BtcUsd,
-            price: 99.99,
-        });
+        // let d2 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1997-12-19T16:39:57-08:00").unwrap());
+        // let _ = e_log.push(&Ticker{
+        //     dtg: d2,
+        //     product_id: ProductId::BtcUsd,
+        //     price: 99.99,
+        // });
         let batch = e_log.record_batch().unwrap();
         // println!("batch: {:?}", &batch);
         let test_case = pretty_format_batches(&[batch]).unwrap().to_string();
@@ -348,7 +349,6 @@ mod tests{
 | dtg                 | product_id | price |
 +---------------------+------------+-------+
 | 1996-12-20T00:39:57 | BtcUsd     | 88.87 |
-| 1996-12-20T00:39:57 | BtcUsd     | 99.99 |
 +---------------------+------------+-------+";
         assert_eq!(test_case, expected_result);
 
@@ -364,8 +364,9 @@ mod tests{
             product_id: ProductId::BtcUsd,
             price: 88.87,
         });
+        let d2 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1997-12-19T16:39:57-08:00").unwrap());
         let _ = e_log.push(&Ticker{
-            dtg: d1,
+            dtg: d2,
             product_id: ProductId::BtcUsd,
             price: 99.99,
         });
@@ -377,7 +378,7 @@ mod tests{
 | dtg                 | product_id | price |
 +---------------------+------------+-------+
 | 1996-12-20T00:39:57 | BtcUsd     | 88.87 |
-| 1996-12-20T00:39:57 | BtcUsd     | 99.99 |
+| 1997-12-20T00:39:57 | BtcUsd     | 99.99 |
 +---------------------+------------+-------+";
         assert_eq!(test_case, expected_result);
         e_log.write_csv().await;

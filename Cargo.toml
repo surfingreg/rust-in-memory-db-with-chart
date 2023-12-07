@@ -5,4 +5,5 @@ members = [
      "coinbase_websocket",
     "arrow_db",
     "logger",
+    "visual",
 ]
