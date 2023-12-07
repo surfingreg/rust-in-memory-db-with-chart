@@ -7,3 +7,5 @@ members = [
     "logger",
     "visual",
 ]
+resolver = "2"
+

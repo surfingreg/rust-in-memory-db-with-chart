@@ -114,7 +114,7 @@ fn generate_websocket_subscribe_json() -> serde_json::Value {
         // channels:vec!["ticker".to_owned(), "level2".to_owned()]
         channels:vec!["ticker".to_owned()]
     };
-    let j:serde_json::Value = serde_json::to_value(&cb_sub).expect("[json_ws_subscribe] json serialize failed");
+    let j:serde_json::Value = serde_json::to_value(cb_sub).expect("[json_ws_subscribe] json serialize failed");
     j.to_owned()
 
 }

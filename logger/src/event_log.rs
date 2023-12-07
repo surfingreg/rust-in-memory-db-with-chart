@@ -21,8 +21,13 @@ use common_lib::cb_ticker::{Ticker};
 pub struct EventBook {
     pub book:Arc<RwLock<HashMap<String, EventLog>>>
 }
-
+impl Default for EventBook {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl EventBook {
+
     pub fn new() -> EventBook {
         EventBook {
             book:Arc::new(RwLock::new(HashMap::<String, EventLog>::new()))
@@ -41,7 +46,7 @@ impl EventBook {
                 // an event log exists for this key
 
                 // TODO un-unwrap
-                let _ = event_log.push(val).unwrap();
+                event_log.push(val).unwrap();
                 Ok(())
             },
             None => {
@@ -91,6 +96,12 @@ pub struct EventLog{
     log: SliceRingBuffer<Ticker>
 }
 
+impl Default for EventLog{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[allow(dead_code)]
 impl EventLog{
     pub fn new() -> EventLog{
@@ -105,6 +116,12 @@ impl EventLog{
         // self.read().unwrap().len()
         self.log.len()
     }
+
+    pub fn is_empty(&self)->bool{
+        // self.read().unwrap().len()
+        self.log.is_empty()
+    }
+
 
     // pub fn read(&self) -> Result<RwLockReadGuard<SliceRingBuffer<Ticker>>, EventLogError> {
     //     match self.log.read(){
@@ -139,12 +156,11 @@ impl EventLog{
     }
 
     pub fn schema() -> Schema {
-        let schema = Schema::new(vec![
+        Schema::new(vec![
             Field::new("dtg", DataType::Date64, false),
             Field::new("product_id", DataType::Utf8, false),
             Field::new("price", DataType::Float64, false),
-        ]);
-        schema
+        ])
     }
 
     /// hacked over from a coinbase websocket stream, hence the product id and price fields
@@ -190,7 +206,7 @@ impl EventLog{
         let ctx = SessionContext::new();
         ctx.register_batch("t_one", mem_batch).unwrap();
         let df = ctx.sql(r#"
-            select * from t_one order by dtg
+            select * from t_one order by dtg desc
         "#
         ).await?;
 
@@ -275,7 +291,7 @@ impl EventLog{
         match self.record_batch(){
             Ok(batch)=> {
                 println!("[print_record_batch] rows: {}", batch.num_rows());
-                println!("{}", pretty_format_batches(&[batch]).unwrap().to_string());
+                println!("{}", pretty_format_batches(&[batch]).unwrap());
 
             },
             Err(e)=>println!("[print_record_batch] error: {:?}", &e),

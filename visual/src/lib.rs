@@ -22,9 +22,9 @@ pub mod http_server {
                         use datafusion::arrow::util::pretty::pretty_format_batches;
 
                         if let Some(df) = visual_result_set.data{
-                            format!("{}", pretty_format_batches(&df.collect().await.unwrap()).unwrap().to_string())
+                            pretty_format_batches(&df.collect().await.unwrap()).unwrap().to_string()
                         } else {
-                            format!("[index] no dataframe returned")
+                            "[index] no dataframe returned".to_string()
                         }
 
                     },

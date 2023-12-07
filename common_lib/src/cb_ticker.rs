@@ -32,5 +32,5 @@ fn f64_from_str<'de, D>(deserializer: D) -> Result<f64, D::Error>
     where D: serde::Deserializer<'de>,
 {
     let s: &str = serde::Deserialize::deserialize(deserializer)?;
-    f64::from_str(&s).map_err(D::Error::custom)
+    f64::from_str(s).map_err(D::Error::custom)
 }
