@@ -1,4 +1,5 @@
 //! operator.rs
+//! decommissioned since it only forwards to the database thread anyway
 
 use crate::cb_ticker::{ProductId, Ticker};
 use crate::heartbeat::start_heartbeat;
@@ -25,7 +26,9 @@ pub enum Msg {
         key: ProductId,
         sender: oneshot::Sender<VisualResultSet>,
     },
-    ChartZero { sender: oneshot::Sender<Chart>},
+    // TODO: pass a chart type with a single message instead of many possible messages
+    Chart { sender: oneshot::Sender<Chart>},
+    ChartTest { sender: oneshot::Sender<Chart>},
 }
 
 #[derive(Debug)]
@@ -68,8 +71,8 @@ fn process_message(message: Msg, tx_db: Sender<Msg>) {
                 Err(e) => tracing::error!("[operator] GetChartForOne send error: {:?}", &e),
             }
         },
-        Msg::ChartZero {sender} => {
-            match tx_db.send(Msg::ChartZero { sender }) {
+        Msg::ChartTest {sender} => {
+            match tx_db.send(Msg::ChartTest { sender }) {
                 Ok(_) => tracing::debug!("[operator] ChartZero sent to tx_db"),
                 Err(e) => tracing::error!("[operator] ChartZero send error: {:?}", &e),
             }

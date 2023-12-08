@@ -18,7 +18,7 @@ market_watcher:latest
 use arrow_lib::arrow_db;
 use coinbase_websocket::websocket;
 use common_lib::init::init;
-use common_lib::operator;
+// use common_lib::operator;
 use visual::http_server;
 
 fn main() {
@@ -39,13 +39,13 @@ fn main() {
     let tx_db = arrow_db::run(tokio_runtime.handle().clone());
 
     // operator thread
-    let tx_operator = operator::run(tx_db);
+    // let tx_operator = operator::run(tx_db);
 
     // coinbase websocket thread
-    // let h = websocket::run(tx_operator.clone());
+    let h = websocket::run(tx_db.clone());
 
-    let tx_operator2 = tx_operator.clone();
-    http_server::run(tx_operator2, tokio_runtime.handle().clone());
+    let tx_db2 = tx_db.clone();
+    http_server::run(tx_db2, tokio_runtime.handle().clone());
 
     // h.join().unwrap();
     loop {};

@@ -12,15 +12,17 @@ use handlebars::Handlebars;
 use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
 use crate::analysis;
+use crate::analysis::get_chart;
+use crate::api_internals::request_index_data;
 // use crate::api_internals::request_index_data;
 
 
 
 
-// /// GET '/'
-// async fn index(tx: web::Data<Sender<Msg>>) -> impl Responder {
-//     request_index_data(tx).await
-// }
+/// GET '/'
+async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
+    request_index_data(tx).await
+}
 
 
 /// start actix in a new blocking thread
@@ -86,9 +88,10 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                 App::new()
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
-                    // .route("/", web::get().to(index))
+                    .route("/", web::get().to(get_chart))
+                    .route("/raw", web::get().to(get_raw))
                     // .route("/analysis", web::get().to(analysis::get_analysis))
-                    .route("/", web::get().to(analysis::get_analysis))
+                    .route("/test", web::get().to(analysis::get_test_chart))
                     .route("/js/chart.js", web::get().to(get_chart_js))
 
             })
@@ -114,7 +117,7 @@ async fn get_chart_js()-> impl Responder{
 
 }
 
-fn load_private_key(filename: &str) -> rustls::PrivateKey {
+fn _load_private_key(filename: &str) -> rustls::PrivateKey {
     let keyfile = fs::File::open(filename).expect("cannot open private key file");
     let mut reader = BufReader::new(keyfile);
 
@@ -136,7 +139,7 @@ fn load_private_key(filename: &str) -> rustls::PrivateKey {
     );
 }
 
-fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
+fn _load_certs(filename: &str) -> Vec<rustls::Certificate> {
     let certfile = fs::File::open(filename).expect("cannot open certificate file");
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)

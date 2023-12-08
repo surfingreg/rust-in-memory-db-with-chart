@@ -58,7 +58,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) {
             visual_data_all(&key.to_string(), evt_book, sender, tr);
         },
 
-        Msg::ChartZero {sender} => {
+        Msg::ChartTest {sender} => {
             match chart_zero_data(){
                 Ok(vec_json) => {
                     match sender.send(vec_json){
