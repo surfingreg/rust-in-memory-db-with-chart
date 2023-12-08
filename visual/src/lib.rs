@@ -6,6 +6,7 @@ pub mod http_server {
     use common_lib::cb_ticker::ProductId;
     use common_lib::operator::{Msg, VisualResultSet};
     use crossbeam_channel::Sender;
+    use tokio::runtime::Handle;
 
     #[get("/")]
     async fn index(tx: web::Data<Sender<Msg>>) -> impl Responder {
@@ -45,28 +46,29 @@ pub mod http_server {
         format!("Hello {}!", &name)
     }
 
-    pub fn run(tx_operator2: Sender<Msg>) {
-        let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
-            // .worker_threads(7)
-            .on_thread_start(|| {})
-            .on_thread_stop(|| {})
-            .thread_name("actix")
-            .enable_all()
-            .build()
-            .expect("Tokio runtime didn't start");
+    pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
 
-        let _ = tokio_runtime.block_on(async {
-            let tx_operator = web::Data::new(tx_operator2.clone());
+        std::thread::spawn(move ||{
+            // let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+            //     // .worker_threads(7)
+            //     .on_thread_start(|| {})
+            //     .on_thread_stop(|| {})
+            //     .thread_name("actix")
+            //     .enable_all()
+            //     .build()
+            //     .expect("Tokio runtime didn't start");
 
-            HttpServer::new(move || {
-                App::new()
-                    .app_data(tx_operator.clone())
-                    .service(index)
-                    .service(hello)
-            })
-            .bind(("127.0.0.1", 8080))?
-            .run()
-            .await
+            let _ = tokio_runtime.block_on(async {
+                let tx_operator = web::Data::new(tx_operator2.clone());
+
+                HttpServer::new(move || {
+                    App::new().app_data(tx_operator.clone())
+                        .service(index)
+                        .service(hello)
+                }).bind(("127.0.0.1", 8080))?
+                    .run()
+                    .await
+            });
         });
     }
 }

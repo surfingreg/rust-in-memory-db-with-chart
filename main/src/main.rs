@@ -21,24 +21,22 @@ use common_lib::init::init;
 use common_lib::operator;
 use visual::http_server;
 
-#[tokio::main]
-async fn main() {
-    // let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
-    // 	.worker_threads(8)
-    // 	.on_thread_start(|| {})
-    // 	.on_thread_stop(|| {})
-    // 	.thread_name("alpaca")
-    // 	.enable_all()
-    // 	.build()
-    // 	.expect("Tokio runtime didn't start");
-    //
+fn main() {
 
     // general logging stuff I always do
     init(env!("CARGO_MANIFEST_DIR"));
 
+    let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+        // .worker_threads(7)
+        .on_thread_start(|| {})
+        .on_thread_stop(|| {})
+        .thread_name("actix")
+        .enable_all()
+        .build()
+        .expect("Tokio runtime didn't start");
+
     // database thread
-    let tr = tokio::runtime::Handle::current();
-    let tx_db = arrow_db::run(tr);
+    let tx_db = arrow_db::run(tokio_runtime.handle().clone());
 
     // operator thread
     let tx_operator = operator::run(tx_db);
@@ -47,9 +45,7 @@ async fn main() {
     let h = websocket::run(tx_operator.clone());
 
     let tx_operator2 = tx_operator.clone();
-    std::thread::spawn(|| {
-        http_server::run(tx_operator2);
-    });
+    http_server::run(tx_operator2, tokio_runtime.handle().clone());
 
     h.join().unwrap();
     // loop {};
