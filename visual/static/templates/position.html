@@ -1,0 +1,60 @@
+{{#*inline "page"}}
+<h2><p>{{title}}</p></h2>
+<p>{{message}}</p>
+<style>
+    table {
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: #dddddd;
+    }
+</style>
+<br>
+<table>
+    <tr>
+        <td>symbol</td>
+        <td>pl_closed</td>
+        <td>pl_posn</td>
+        <td>share_cents_until_sale</td>
+        <td>rating</td>
+        <td>qty_posn</td>
+        <td>pl_posn_share</td>
+        <td>sell_high_share_cents</td>
+        <td>basis</td>
+        <td>market_value</td>
+        <td>price_posn_entry</td>
+        <td>price_market</td>
+        <td>posn_age_sec</td>
+        <td>dtg</td>
+    <tr>
+    {{#each data}}
+    <tr>
+        <td><a href="https://finance.yahoo.com/chart/{{this.symbol}}">{{this.symbol}}</a></td>
+        <td>{{this.profit_closed}}</td>
+        <td>{{this.pl_posn}}</td>
+        <td>{{this.share_cents_until_sale}}</td>
+        <td>{{this.rating}}</td>
+        <td>{{this.qty_posn}}</td>
+        <td>{{this.pl_posn_share}}</td>
+        <td>{{this.sell_high_share_cents}}</td>
+        <td>{{this.basis}}</td>
+        <td>{{this.market_value}}</td>
+        <td>{{this.price_posn_entry}}</td>
+        <td>{{this.price_market}}</td>
+        <td>{{this.posn_age_sec}}</td>
+        <td>{{this.dtg}}</td>
+
+    </tr>
+    {{/each}}
+</table>
+{{/inline}}
+{{> (lookup this "parent")}}

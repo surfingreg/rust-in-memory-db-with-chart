@@ -1,0 +1,52 @@
+{{#*inline "page"}}
+<h2><p>{{title}}</p></h2>
+<p>{{message}}</p>
+<style>
+    table {
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: #dddddd;
+    }
+</style>
+<br>
+<table>
+    <tr>
+        <td>Symbol</td>
+        <td>Active</td>
+        <td>Trade Size</td>
+        <td>Recent Price</td>
+        <td></td>
+    <tr>
+    {{#each data}}
+    <form action="/symbols" method="post" enctype="text/html" >
+    <tr>
+        <td>
+            <a href="https://finance.yahoo.com/chart/{{this.symbol}}">{{this.symbol}}</a>
+            <input type="text" name="symbol" value="{{this.symbol}}" hidden="true"/>
+        </td>
+        <td>
+            <select name="active">
+                <option value="{{this.active}}">{{this.active}}</option>
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </select>
+        </td>
+        <td><input type="text" name="trade_size" value="{{this.trade_size}}"/></td>
+        <td><input type="submit" value="Save"></td>
+        <td>{{this.price_last}}<input type="text" name="price_last" value="{{this.price_last}}" hidden="true"/></td>
+        </form>
+    </tr>
+    {{/each}}
+</table>
+{{/inline}}
+{{> (lookup this "parent")}}
