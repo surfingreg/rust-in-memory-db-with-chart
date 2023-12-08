@@ -38,15 +38,12 @@ fn main() {
     // database thread
     let tx_db = arrow_db::run(tokio_runtime.handle().clone());
 
-    // operator thread
-    // let tx_operator = operator::run(tx_db);
-
-    // coinbase websocket thread
+    // websocket thread
     let h = websocket::run(tx_db.clone());
 
     let tx_db2 = tx_db.clone();
     http_server::run(tx_db2, tokio_runtime.handle().clone());
 
-    // h.join().unwrap();
-    loop {};
+    h.join().unwrap();
+    // loop {};
 }

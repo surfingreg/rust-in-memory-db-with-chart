@@ -1,7 +1,6 @@
 //! websocket.rs
 
 use crate::coinbase::Coinbase;
-use common_lib::operator::Msg;
 use crossbeam::channel::Sender;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -11,6 +10,7 @@ use std::thread::JoinHandle;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 use url::Url;
+use common_lib::Msg;
 
 /// Start a new thread listening to the coinbase websocket
 pub fn run(tx_operator: Sender<Msg>) -> JoinHandle<()> {

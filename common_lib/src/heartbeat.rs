@@ -1,9 +1,10 @@
 //! heartbeat.rs
 
-use crate::operator::Msg;
 use crossbeam_channel::{tick, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
+use crate::Msg;
+
 
 const PING_MS: u64 = 10000;
 

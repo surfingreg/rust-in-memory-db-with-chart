@@ -1,5 +1,8 @@
 //! common_lib...lib.rs
+use datafusion::dataframe::DataFrame;
 use serde::{Deserialize, Serialize};
+use crate::cb_ticker::{ProductId, Ticker};
+use tokio::sync::oneshot;
 
 pub mod cb_ticker;
 pub mod heartbeat;
@@ -28,4 +31,42 @@ pub enum KitchenSinkError {
     DeleteFailed,
     NoSharesFound,
     SqlInjectionRisk,
+}
+
+
+//
+#[derive(Debug)]
+pub enum Msg {
+    // Post(T),
+    Post(Ticker),
+    // PostAndLog(T),
+    Ping,
+    Pong,
+    Start,
+    Stop,
+    GetChartForOne {
+        key: ProductId,
+        sender: oneshot::Sender<VisualResultSet>,
+    },
+    GetChartForAll {
+        key: ProductId,
+        sender: oneshot::Sender<VisualResultSet>,
+    },
+    // TODO: pass a chart type with a single message instead of many possible messages
+    RequestChart { chart_type: ChartType, sender: oneshot::Sender<Chart>},
+
+}
+
+#[derive(Debug)]
+pub struct VisualResultSet {
+    pub data: Option<DataFrame>,
+    pub error: Option<String>,
+}
+
+
+
+#[derive(Debug)]
+pub enum ChartType{
+    Basic,
+    Test
 }

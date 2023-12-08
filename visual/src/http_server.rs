@@ -6,13 +6,13 @@ use std::io::BufReader;
 use std::str::FromStr;
 use actix_files::NamedFile;
 use actix_web::{web, App, HttpServer, Responder};
-use common_lib::operator::{Msg};
 use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
+use common_lib::Msg;
 use crate::analysis;
-use crate::analysis::get_chart;
+use crate::analysis::present_chart;
 use crate::api_internals::request_index_data;
 // use crate::api_internals::request_index_data;
 
@@ -88,10 +88,10 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                 App::new()
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
-                    .route("/", web::get().to(get_chart))
+                    .route("/", web::get().to(present_chart))
                     .route("/raw", web::get().to(get_raw))
                     // .route("/analysis", web::get().to(analysis::get_analysis))
-                    .route("/test", web::get().to(analysis::get_test_chart))
+                    .route("/test", web::get().to(analysis::present_chart_test))
                     .route("/js/chart.js", web::get().to(get_chart_js))
 
             })
