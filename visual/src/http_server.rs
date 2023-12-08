@@ -4,21 +4,24 @@
 use std::fs;
 use std::io::BufReader;
 use std::str::FromStr;
+use actix_files::NamedFile;
 use actix_web::{web, App, HttpServer, Responder};
 use common_lib::operator::{Msg};
 use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
-use crate::api_internals::request_index_data;
+use crate::analysis;
+// use crate::api_internals::request_index_data;
 
 
 
 
-/// GET '/'
-async fn index(tx: web::Data<Sender<Msg>>) -> impl Responder {
-    request_index_data(tx).await
-}
+// /// GET '/'
+// async fn index(tx: web::Data<Sender<Msg>>) -> impl Responder {
+//     request_index_data(tx).await
+// }
+
 
 /// start actix in a new blocking thread
 pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
@@ -50,32 +53,32 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
             // https://github.com/rustls/rustls/blob/main/examples/src/bin/tlsserver-mio.rs
             // let certs = load_certs("/Users/gp/trade/frontend/certificate/cert.pem");
             // let privkey = load_private_key("/Users/gp/trade/frontend/certificate/key.pem");
-            let (certs, privkey) = match config_location{
-                ConfigLocation::Docker => {
-                    let certs = load_certs("./static/certificate/cert.pem");
-                    let privkey = load_private_key("./static/certificate/key.pem");
-                    // let ocsp = load_ocsp(&args.flag_ocsp);
-                    (certs, privkey)
-                },
-                ConfigLocation::NotDocker => {
-                    // TODO: don't hard code paths
-                    let certs = load_certs("visual/static/certificate/cert.pem");
-                    let privkey = load_private_key("visual/static/certificate/key.pem");
-                    // let ocsp = load_ocsp(&args.flag_ocsp);
-                    (certs, privkey)
-                }
-            };
+            // let (certs, privkey) = match config_location{
+            //     ConfigLocation::Docker => {
+            //         let certs = load_certs("./static/certificate/cert.pem");
+            //         let privkey = load_private_key("./static/certificate/key.pem");
+            //         // let ocsp = load_ocsp(&args.flag_ocsp);
+            //         (certs, privkey)
+            //     },
+            //     ConfigLocation::NotDocker => {
+            //         // TODO: don't hard code paths
+            //         let certs = load_certs("visual/static/certificate/cert.pem");
+            //         let privkey = load_private_key("visual/static/certificate/key.pem");
+            //         // let ocsp = load_ocsp(&args.flag_ocsp);
+            //         (certs, privkey)
+            //     }
+            // };
 
-            let config = rustls::ServerConfig::builder()
-                .with_cipher_suites(&rustls::ALL_CIPHER_SUITES.to_vec())
-                .with_safe_default_kx_groups()
-                .with_protocol_versions(&rustls::ALL_VERSIONS.to_vec())
-                .expect("inconsistent cipher-suites/versions specified")
-                // .with_client_cert_verifier(NoClientAuth::)
-                // .with_single_cert_with_ocsp(certs, privkey, ocsp)
-                .with_no_client_auth()
-                .with_single_cert(certs, privkey)
-                .expect("bad certificates/private key");
+            // let config = rustls::ServerConfig::builder()
+            //     .with_cipher_suites(&rustls::ALL_CIPHER_SUITES.to_vec())
+            //     .with_safe_default_kx_groups()
+            //     .with_protocol_versions(&rustls::ALL_VERSIONS.to_vec())
+            //     .expect("inconsistent cipher-suites/versions specified")
+            //     // .with_client_cert_verifier(NoClientAuth::)
+            //     // .with_single_cert_with_ocsp(certs, privkey, ocsp)
+            //     .with_no_client_auth()
+            //     .with_single_cert(certs, privkey)
+            //     .expect("bad certificates/private key");
 
             let tx_operator = web::Data::new(tx_operator2.clone());
 
@@ -83,7 +86,10 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                 App::new()
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
-                    .route("/", web::get().to(index))
+                    // .route("/", web::get().to(index))
+                    // .route("/analysis", web::get().to(analysis::get_analysis))
+                    .route("/", web::get().to(analysis::get_analysis))
+                    .route("/js/chart.js", web::get().to(get_chart_js))
 
             })
             // .bind_rustls(("127.0.0.1", 8443), config)?
@@ -92,6 +98,20 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
             .await
         });
     });
+}
+
+/// GET http://127.0.0.1:8080/js/chart.js
+/// https://www.chartjs.org/docs/latest/getting-started/installation.html
+async fn get_chart_js()-> impl Responder{
+    tracing::debug!("[get_chart_js]");
+    let config_location:ConfigLocation = ConfigLocation::from_str(&std::env::var("CONFIG_LOCATION").unwrap_or_else(|_| "not_docker".to_owned())).expect("CONFIG_LOCATION");
+
+    match config_location{
+        ConfigLocation::Docker => NamedFile::open_async("./static/js/chart.js").await,
+        // TODO: un-hard-code paths
+        ConfigLocation::NotDocker => NamedFile::open_async("visual/static/js/chart.js").await
+    }
+
 }
 
 fn load_private_key(filename: &str) -> rustls::PrivateKey {
@@ -142,9 +162,9 @@ fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::{http::header::ContentType, test, App};
+    // use actix_web::{http::header::ContentType, test, App};
 
-    use super::*;
+    // use super::*;
 
     // #[actix_web::test]
     // async fn test_index_get() {

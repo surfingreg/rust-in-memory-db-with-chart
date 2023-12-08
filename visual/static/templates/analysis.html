@@ -19,16 +19,15 @@
 </style>
 
 <div>
-    <canvas id="chart_2"></canvas><br>
-    <canvas id="chart_3"></canvas><br>
-    <canvas id="chart_4"></canvas><br>
     <canvas id="chart_0"></canvas><br>
-    <canvas id="chart_1"></canvas><br>
+<!--    <canvas id="chart_2"></canvas><br>-->
+<!--    <canvas id="chart_3"></canvas><br>-->
+<!--    <canvas id="chart_4"></canvas><br>-->
+<!--    <canvas id="chart_1"></canvas><br>-->
 </div>
 
 
 <!--<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>-->
-
 <script src="/js/chart.js"></script>
 <script>
 
@@ -74,10 +73,10 @@
     });
     const ctx_0 = document.getElementById('chart_0');
     const data_0 = {labels: json_0_columns, datasets: chart_0_data_array};
-    let title_0 = 'Net Transaction Profit';
+    let title_0 = 'TEST CHART';
 
     // ********* chart 1 ***************************
-    // average profit per transaction
+ /*   // average profit per transaction
     const chart_1_columns = '{{chart_1_columns}}';
     const json_1_columns = JSON.parse(chart_1_columns.replace(/&quot;/g, '\"'));
     const chart_1_data = "{{chart_1_data}}";
@@ -133,21 +132,21 @@
     });
     const ctx_4 = document.getElementById('chart_4');
     const data_4 = {labels: json_4_columns, datasets: chart_4_data_array,};
-    let title_4 = 'Value Traded';
+    let title_4 = 'Value Traded';*/
 
 
 
     let config_0 = get_config(title_0, data_0);
-    let config_1 = get_config(title_1, data_1);
-    let config_2 = get_config(title_2, data_2);
-    let config_3 = get_config(title_3, data_3);
-    let config_4 = get_config(title_3, data_4);
+    // let config_1 = get_config(title_1, data_1);
+    // let config_2 = get_config(title_2, data_2);
+    // let config_3 = get_config(title_3, data_3);
+    // let config_4 = get_config(title_3, data_4);
 
     new Chart(ctx_0, config_0);
-    new Chart(ctx_1, config_1);
-    new Chart(ctx_2, config_2);
-    new Chart(ctx_3, config_3);
-    new Chart(ctx_4, config_4);
+    // new Chart(ctx_1, config_1);
+    // new Chart(ctx_2, config_2);
+    // new Chart(ctx_3, config_3);
+    // new Chart(ctx_4, config_4);
 
 
 </script>

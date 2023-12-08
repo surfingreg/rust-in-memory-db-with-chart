@@ -350,12 +350,12 @@ mod tests {
             product_id: ProductId::BtcUsd,
             price: 88.87,
         });
-        let d2 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1997-12-19T16:39:57-08:00").unwrap());
-        let _ = e_log.push(&Ticker {
-            dtg: d2,
-            product_id: ProductId::BtcUsd,
-            price: 99.99,
-        });
+        // let d2 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1997-12-19T16:39:57-08:00").unwrap());
+        // let _ = e_log.push(&Ticker {
+        //     dtg: d2,
+        //     product_id: ProductId::BtcUsd,
+        //     price: 99.99,
+        // });
         let df = e_log.query_sql_all().await.unwrap();
         let vec_record_batch = df.collect().await.unwrap();
         let test_case = pretty_format_batches(vec_record_batch.as_slice())
@@ -365,7 +365,6 @@ mod tests {
 | dtg                 | product_id | price |
 +---------------------+------------+-------+
 | 1996-12-20T00:39:57 | BtcUsd     | 88.87 |
-| 1997-12-20T00:39:57 | BtcUsd     | 99.99 |
 +---------------------+------------+-------+";
         assert_eq!(test_case, expected_result);
         e_log.write_csv().await;

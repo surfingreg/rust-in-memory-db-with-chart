@@ -6,6 +6,7 @@ use crossbeam_channel::{unbounded, Sender};
 use datafusion::dataframe::DataFrame;
 use std::fmt::Debug;
 use tokio::sync::oneshot;
+use crate::Chart;
 
 #[derive(Debug)]
 pub enum Msg {
@@ -24,6 +25,7 @@ pub enum Msg {
         key: ProductId,
         sender: oneshot::Sender<VisualResultSet>,
     },
+    ChartZero { sender: oneshot::Sender<Chart>},
 }
 
 #[derive(Debug)]
@@ -47,7 +49,7 @@ pub fn run(tx_db: Sender<Msg>) -> Sender<Msg> {
     tx
 }
 
-/// not sure this is necessary
+/// TODO: get rid of this unnecessary indirection
 fn process_message(message: Msg, tx_db: Sender<Msg>) {
     match message {
         Msg::Ping => tracing::debug!("[operator] PING"),
@@ -65,7 +67,13 @@ fn process_message(message: Msg, tx_db: Sender<Msg>) {
                 Ok(_) => tracing::debug!("[operator] GetChartForOne sent to tx_db"),
                 Err(e) => tracing::error!("[operator] GetChartForOne send error: {:?}", &e),
             }
-        }
+        },
+        Msg::ChartZero {sender} => {
+            match tx_db.send(Msg::ChartZero { sender }) {
+                Ok(_) => tracing::debug!("[operator] ChartZero sent to tx_db"),
+                Err(e) => tracing::error!("[operator] ChartZero send error: {:?}", &e),
+            }
+        },
         _ => tracing::debug!("[operator] {:?} UNKNOWN ", &message),
     }
 }

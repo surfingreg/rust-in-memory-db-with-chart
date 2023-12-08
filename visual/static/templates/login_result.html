@@ -1,8 +1,0 @@
-{{#*inline "page"}}
-    <p>{{message}}</p>
-    {{ #if is_logged_in }}
-        <meta http-equiv="refresh" content="0; url=/dashboard" />
-    {{/if}}
-
-{{/inline}}
-{{> (lookup this "parent")}}

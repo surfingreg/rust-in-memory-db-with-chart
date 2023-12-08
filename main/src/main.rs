@@ -42,11 +42,11 @@ fn main() {
     let tx_operator = operator::run(tx_db);
 
     // coinbase websocket thread
-    let h = websocket::run(tx_operator.clone());
+    // let h = websocket::run(tx_operator.clone());
 
     let tx_operator2 = tx_operator.clone();
     http_server::run(tx_operator2, tokio_runtime.handle().clone());
 
-    h.join().unwrap();
-    // loop {};
+    // h.join().unwrap();
+    loop {};
 }
