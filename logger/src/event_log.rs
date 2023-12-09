@@ -15,7 +15,9 @@ use datafusion::prelude::*;
 use slice_ring_buffer::SliceRingBuffer;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use chrono::{DateTime, Utc};
+use common_lib::KitchenSinkError;
 
 /// Container for multiple event logs keyed by a string
 pub struct EventBook {
@@ -158,6 +160,52 @@ impl EventLog {
     }
 
     /// select * from table
+    pub async fn chart_query_without_sql(&self)-> Result<serde_json::Value, KitchenSinkError>  {
+
+        let slice = self.log.as_slice();
+
+        let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
+        let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
+
+        tracing::info!("dates: {:?}", &dates);
+        tracing::info!("prices: {:?}", &prices);
+
+        let json = serde_json::json!({
+            "columns": dates,
+            "chart_data":[
+                {
+                    "key":"BTC",
+                    "val": prices
+                }
+            ]
+        });
+
+        // json: Object {"chart_data": Array [Object {"key": String("BTC"), "prices": Array [Number(44203.49), Number(44202.91), Number(44203.35), Number(44203.35), Number(44203.63), Number(44203.63)]}], "columns": Array [String("2023-12-09T00:42:13.031827Z"), String("2023-12-09T00:42:12.268100Z"), String("2023-12-09T00:42:11.456841Z"), String("2023-12-09T00:42:11.453783Z"), String("2023-12-09T00:42:10.996591Z"), String("2023-12-09T00:42:10.996591Z")]}
+        tracing::info!("json: {:?}", &json);
+
+        Ok(json)
+
+
+    }
+
+    /// select * from table
+    pub async fn query_sql_for_chart(&self) -> datafusion::error::Result<DataFrame> {
+        let mem_batch = self.record_batch().unwrap();
+        let ctx = SessionContext::new();
+        ctx.register_batch("t_one", mem_batch).unwrap();
+
+        // select columns as "columns!", chart_data as "chart_data!" from v_analysis_net_profit_chart
+        let df = ctx.sql(
+                r#"
+                    select dtg, product_id, price from t_one order by dtg desc
+                "#,
+            ).await?;
+
+        Ok(df.clone())
+    }
+
+
+    /// select * from table
     pub async fn query_sql_all(&self) -> datafusion::error::Result<DataFrame> {
         let mem_batch = self.record_batch().unwrap();
         let ctx = SessionContext::new();
@@ -172,6 +220,8 @@ impl EventLog {
 
         Ok(df.clone())
     }
+
+
 
     /// Perform calculations on the in-memory data using DataFusion's SQL
     /// select * from table
@@ -241,16 +291,10 @@ impl EventLog {
             slice_max
         };
 
-        // read lock, may not necessarily be perfectly current
-        // match  self.read(){
-        //     Ok(log_readable) =>{
-        let slice_4: &[Ticker] = &self.log.as_slice()[0..slice_max];
-        assert_eq!(slice_max, slice_4.len());
-        let avg_4: f64 = slice_4.iter().map(|x| x.price).sum::<f64>() / slice_4.len() as f64;
-        Ok(avg_4)
-        //     },
-        //     Err(e)=> Err(e)
-        // }
+        let slice_n: &[Ticker] = &self.log.as_slice()[0..slice_max];
+        assert_eq!(slice_max, slice_n.len());
+        let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
+        Ok(avg_n)
     }
 
     /// FYI: DataFusion doesn't by default print chrono DateTimes with the time

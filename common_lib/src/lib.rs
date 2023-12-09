@@ -44,24 +44,25 @@ pub enum Msg {
     Pong,
     Start,
     Stop,
-    GetChartForOne {
-        key: ProductId,
-        sender: oneshot::Sender<VisualResultSet>,
-    },
-    GetChartForAll {
-        key: ProductId,
-        sender: oneshot::Sender<VisualResultSet>,
-    },
+    // GetChartForOne {
+    //     key: ProductId,
+    //     sender: oneshot::Sender<VisualResultSet>,
+    // },
+    // GetChartForAll {
+    //     key: ProductId,
+    //     sender: oneshot::Sender<VisualResultSet>,
+    // },
     // TODO: pass a chart type with a single message instead of many possible messages
-    RequestChart { chart_type: ChartType, sender: oneshot::Sender<Chart>},
+    RequestChart{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
+    // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<Chart> },
 
 }
 
-#[derive(Debug)]
-pub struct VisualResultSet {
-    pub data: Option<DataFrame>,
-    pub error: Option<String>,
-}
+// #[derive(Debug)]
+// pub struct VisualResultSet {
+//     pub data: Option<serde_json::Value>,
+//     pub error: Option<String>,
+// }
 
 
 
