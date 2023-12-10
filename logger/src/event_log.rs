@@ -160,7 +160,7 @@ impl EventLog {
     }
 
     /// select * from table
-    pub async fn chart_query_without_sql(&self)-> Result<serde_json::Value, KitchenSinkError>  {
+    pub async fn chart_data_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
 
         let slice = self.log.as_slice();
 

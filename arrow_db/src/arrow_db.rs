@@ -1,16 +1,20 @@
 //! arrow_db.rs
+//!
+//! thread/message receiver for database operations; calls into event_log.rs for the in-memory
+//! data structures.
+//!
 
+use std::error::Error;
 use common_lib::cb_ticker::{ProductId, Ticker};
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
 use logger::event_log::{EventBook, EventLog};
 use std::sync::Arc;
-use arrow::ipc::RecordBatch;
+use serde_json::Value;
 use tokio::runtime::Handle;
-use tokio::sync::oneshot;
 use common_lib::{Chart, ChartType, KitchenSinkError, Msg};
 
-/// spawn a thread to listen for messages; return the channel to communicate to this thread with.
+/// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
     tracing::debug!("[run]");
     let (tx, rx) = unbounded();
@@ -27,7 +31,9 @@ pub fn run(tr: Handle) -> Sender<Msg> {
                     let evt_book = event_book.clone();
 
                     // new thread to prevent processing blocking the websocket
-                    process_message(message, &evt_book, tr.clone());
+                    if let Err(e) = process_message(message, &evt_book, tr.clone()){
+                        tracing::debug!("[run] message error: {:?}", e);
+                    }
                 }
                 Err(e) => tracing::debug!("[arrow_db] error {:?}", &e),
             }
@@ -36,16 +42,19 @@ pub fn run(tr: Handle) -> Sender<Msg> {
     tx
 }
 
-/// Run this in another thread in response to a incoming websocket packet or http request.
-fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) {
+fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), KitchenSinkError>  {
     tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
 
     match message {
-        Msg::Ping => tracing::debug!("[arrow_db] PING"),
+        Msg::Ping => {
+            tracing::debug!("[arrow_db] PING");
+            Ok(())
+        },
 
         Msg::Post(ticker) => {
             post_ticker(&ticker, evt_book);
             run_calculations(&ticker.product_id.to_string(), evt_book);
+            Ok(())
         }
 
         // Msg::GetChartForOne { key, sender } => {
@@ -63,43 +72,39 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) {
         Msg::RequestChart{chart_type, sender} => {
             match chart_type{
                 ChartType::Basic => {
-                    match chart_data_without_sql(&ProductId::BtcUsd.to_string(), &evt_book, tr.clone()) {
-                        Some(vec_json) => {
-                            if let Err(e) = sender.send(vec_json){
-                                tracing::error!("[DbMsg::ChartZero] send error: {:?}", &e);
-                            };
-                        },
-                        None =>tracing::error!("[DbMsg::ChartZero] error"),
+                    let json:Value = chart_data_without_sql(&ProductId::BtcUsd.to_string(), &evt_book, tr.clone())?;
+                    if let Err(e) = sender.send(json) {
+                        tracing::error!("[RequestChart] error: {:?}", &e);
+                        Err(KitchenSinkError::SendError)
+                    } else {
+                        Ok(())
                     }
                 },
                 _ =>{
-                    todo!();
+                    Err(KitchenSinkError::NoMessageMatch)
                 }
 
             }
         },
 
-        // todo: get rid of this
-        // Msg::RequestChartJson {
-        //     chart_type, sender} => {
-        //     match chart_type{
-        //         ChartType::Test => {
-        //             match chart_data_test(){
-        //                 Ok(vec_json) => {
-        //                     if let Err(e) = sender.send(vec_json){
-        //                          tracing::error!("[DbMsg::ChartZero] reply send error: {:?}", &e);
-        //                     };
-        //                 },
-        //                 Err(e)=>tracing::error!("[DbMsg::ChartZero] error: {:?}", &e)
-        //             }
-        //         },
-        //         _ => {
-        //             todo!();
-        //         }
-        //     }
-        // }
+        _ => {
+            tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message);
+            Err(KitchenSinkError::NoMessageMatch)
+        },
+    }
+}
 
-        _ => tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message),
+/// Get a read lock on the database. Block_on because already in it's own thread and cpu-intensive;
+/// async isn't helpful here (in our in-memory case) but still dictated by DataFusion.
+fn chart_data_without_sql(key: &str, evt_book: &EventBook, tr: Handle) -> Result<Value, KitchenSinkError> {
+    let evt_book_read_lock = evt_book.book.read().unwrap();
+    match evt_book_read_lock.get(key){
+        Some(evt_log)=>{
+            tr.block_on(async{
+                evt_log.chart_data_without_sql().await
+            })
+        },
+        None=> Err(KitchenSinkError::DbError),
     }
 }
 
@@ -133,30 +138,6 @@ fn chart_data_test() ->Result<Chart, KitchenSinkError> {
 }
 
 
-fn chart_data_without_sql(key: &str, evt_book: &EventBook, tr: Handle) -> Option<serde_json::Value> {
-    let evt_book_read_lock = evt_book.book.read().unwrap();
-    let e_log_result = evt_book_read_lock.get(key);
-
-    match e_log_result {
-        Some(evt_log) => {
-            tr.block_on(async {
-                match evt_log.chart_query_without_sql().await {
-                    Ok(json) => {
-                        Some(json)
-                    },
-                    Err(e) => {
-                        tracing::error!("[chart_data_without_sql] error: {:?}", &e);
-                        None
-                    },
-                }
-            })
-        }
-        None => {
-            tracing::error!("[chart_data_without_sql] event log for {} doesn't exist yet", key);
-            None
-        }
-    }
-}
 
 // fn visual_data_one(key: &str, evt_book: &EventBook, sender: oneshot::Sender<VisualResultSet>, tr: Handle) {
 //     let evt_book_read_lock = evt_book.book.read().unwrap();

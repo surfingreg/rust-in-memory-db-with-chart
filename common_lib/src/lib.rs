@@ -1,6 +1,7 @@
 //! common_lib...lib.rs
 use datafusion::dataframe::DataFrame;
 use serde::{Deserialize, Serialize};
+use strum_macros::Display;
 use crate::cb_ticker::{ProductId, Ticker};
 use tokio::sync::oneshot;
 
@@ -16,21 +17,16 @@ pub struct Chart{
     pub chart_data: serde_json::Value  // aka profit_total (daily)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(thiserror::Error)]
+#[derive(Debug, PartialEq, Display)]
 pub enum KitchenSinkError {
-    ReqwestError,
+    DbError,
     JsonError,
     Serde,
     ChannelError,
-    Alpaca422,
-    Alpaca429,
-    Alpaca403,
-    TransactionNotFound,
-    BuyOrderExists,
-    PositionExists,
-    DeleteFailed,
-    NoSharesFound,
-    SqlInjectionRisk,
+    SendError,
+    RecvError,
+    NoMessageMatch,
 }
 
 
@@ -57,14 +53,6 @@ pub enum Msg {
     // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<Chart> },
 
 }
-
-// #[derive(Debug)]
-// pub struct VisualResultSet {
-//     pub data: Option<serde_json::Value>,
-//     pub error: Option<String>,
-// }
-
-
 
 #[derive(Debug)]
 pub enum ChartType{
