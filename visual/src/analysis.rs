@@ -21,7 +21,7 @@ pub async fn redirect_home() -> HttpResponse {
 }
 
 
-/// TODO: is converting to json even necessary here?
+/// TODO: use flatbuffers or something instead of json
 pub async fn present_chart_rust(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     tracing::debug!("[present_chart]");
     let tx_db = tx_db.into_inner().as_ref().clone();
@@ -38,6 +38,7 @@ pub async fn present_chart_rust(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Han
                 "is_logged_in": true,
                 // "session_username": &session_username,
                 "chart_0_columns": chart_0_columns,
+                // "chart_0_columns": &chart_0.columns,
                 "chart_0_data": chart_0_data,
             });
             let body = hb.render("analysis", &data).unwrap();
