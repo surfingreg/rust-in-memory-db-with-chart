@@ -15,7 +15,7 @@ use datafusion::prelude::*;
 use slice_ring_buffer::SliceRingBuffer;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use common_lib::KitchenSinkError;
 

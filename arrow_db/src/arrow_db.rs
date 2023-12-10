@@ -4,7 +4,6 @@
 //! data structures.
 //!
 
-use std::error::Error;
 use common_lib::cb_ticker::{ProductId, Ticker};
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
@@ -71,18 +70,26 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
         Msg::RequestChart{chart_type, sender} => {
             match chart_type{
-                ChartType::Basic => {
-                    let json:Value = chart_data_without_sql(&ProductId::BtcUsd.to_string(), &evt_book, tr.clone())?;
-                    if let Err(e) = sender.send(json) {
-                        tracing::error!("[RequestChart] error: {:?}", &e);
-                        Err(KitchenSinkError::SendError)
-                    } else {
-                        Ok(())
+                ChartType::BasicAsJson => {
+                    let evt_book_read_lock = evt_book.book.read().unwrap();
+
+                    // TODO: hard-coded hashmap lookup key
+                    let json:Value = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
+                        Some(evt_log)=>{
+                            tr.block_on(async{
+                                evt_log.chart_data_without_sql().await
+                            })
+                        },
+                        None=> Err(KitchenSinkError::DbError),
+                    }?;
+
+                    match sender.send(json) {
+                        Err(_e)=> Err(KitchenSinkError::SendError),
+                        _ => Ok(()),
                     }
-                },
-                _ =>{
-                    Err(KitchenSinkError::NoMessageMatch)
                 }
+                _ => Err(KitchenSinkError::NoMessageMatch),
+
 
             }
         },
@@ -94,24 +101,24 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
     }
 }
 
-/// Get a read lock on the database. Block_on because already in it's own thread and cpu-intensive;
-/// async isn't helpful here (in our in-memory case) but still dictated by DataFusion.
-fn chart_data_without_sql(key: &str, evt_book: &EventBook, tr: Handle) -> Result<Value, KitchenSinkError> {
-    let evt_book_read_lock = evt_book.book.read().unwrap();
-    match evt_book_read_lock.get(key){
-        Some(evt_log)=>{
-            tr.block_on(async{
-                evt_log.chart_data_without_sql().await
-            })
-        },
-        None=> Err(KitchenSinkError::DbError),
-    }
-}
+// /// Get a read lock on the database. Block_on because already in it's own thread and cpu-intensive;
+// /// async isn't helpful here (in our in-memory case) but still dictated by DataFusion.
+// fn chart_data_without_sql(key: &str, evt_book: &EventBook, tr: Handle) -> Result<Value, KitchenSinkError> {
+//     let evt_book_read_lock = evt_book.book.read().unwrap();
+//     match evt_book_read_lock.get(key){
+//         Some(evt_log)=>{
+//             tr.block_on(async{
+//                 evt_log.chart_data_without_sql().await
+//             })
+//         },
+//         None=> Err(KitchenSinkError::DbError),
+//     }
+// }
 
 /// On database thread...
 /// get one long json string of symbols followed by the array of values for the corresponding dates
 /// [{"key" : "aapl", "val" : [0.5500, 0.2600, -1.4800, -3.1000, -0.4000, -0.9300, 0.6000, 10.2000, 0.0, -0.0700, 2.5700, 16.9800, 8.7600, 10.5500, 6.5800]}, {"key" : "amd", "val" : [1.7700, -0.1900, -2.6100, -1.5600, -3.7600, -0.3000, -1.0700, 3.0900, 0.0, 0.0, 0.0, 5.2600, 0.5400, 6.7300, 6.2800]}, {"key" : "amzn", "val" : [1.0800, -0.1500, -3.1700, -0.8400, -0.3900, 0.3200, -0.4500, -1.7300, -1.7300, 7.6700, 1.0500, 2.5700, 3.0600, 15.8200, 8.4800]}, {"key" : "bac", "val" : [-0.0800, -0.3600, -0.7800, -0.2300, -0.5000, -0.3300, -0.8100, -1.1500, 0.4800, -0.3700, -0.5700, 1.2300, -0.8900, -0.3700, 1.7800]}, {"key" : "bbai", "val" : [-0.0100, 0.0, -0.2400, -0.0700, -0.1200, -0.0600, 0.0100, -0.0400, -0.0200, -0.3900, 0.0100, 0.1600, -0.1100, -0.1800, 0.0900]}, {"key" : "intc", "val" : [0.1500, -0.3200, -1.4000, -0.8800, -0.2900, 0.4200, -1.1900, 0.0600, -0.9700, 1.6800, -0.5600, 2.4600, 0.6600, -0.6200, 10.2300]}, {"key" : "nio", "val" : [0.0800, -0.2600, -0.5100, -0.1900, -1.1500, -0.1700, -0.2600, -0.4500, -0.5400, 2.4800, 0.0500, 2.1300, -0.4600, -2.8700, 4.8700]}, {"key" : "pacw", "val" : [-0.1000, -0.2900, -0.6200, -0.1800, -0.2400, -0.2600, -0.3600, -0.4300, 0.0000, 0.3600, 0.0700, -0.2200, 0.0000, -0.9100, 0.2700]}, {"key" : "plug", "val" : [-0.1500, -0.0900, -0.6400, -0.3600, -0.4400, -0.1100, -0.4500, -1.0800, 0.4800, 0.4000, 0.0700, 1.6500, 0.1300, 0.0, 0.0]}, {"key" : "rivn", "val" : [0.2300, 0.0100, -0.2800, -0.6800, -0.7600, -0.3500, -1.5200, -0.5900, -0.7800, 3.6100, 1.7200, 3.9800, 2.6100, 1.4000, 1.9200]}, {"key" : "sofi", "val" : [-0.1000, -0.1400, -0.1600, -0.5200, -0.0500, -0.1500, -0.4300, -0.5500, -1.0700, 0.1800, -0.3800, -0.0100, 1.8700, 0.3100, 0.1800]}, {"key" : "t", "val" : [-0.1700, -0.1600, -0.3100, -0.2700, -0.2500, -0.1200, -0.3300, -0.3500, 0.1600, -0.0100, 0.2200, 0.0900, -0.3200, -0.1100, 0.1700]}, {"key" : "tsla", "val" : [1.1500, -0.2200, -3.0000, -7.6500, -1.2400, 8.8000, -1.7600, 9.5000, 5.0600, -2.0900, 10.1600, 23.5400, 3.6400, 8.5400, 2.2300]}, {"key" : "wbd", "val" : [-0.2000, -0.1000, -0.5000, -0.6200, -0.3200, -0.2300, -0.6100, -0.6100, 0.0100, -0.3700, 0.2300, 0.2300, 0.3400, 0.8700, 0.0]}]
-fn chart_data_test() ->Result<Chart, KitchenSinkError> {
+fn _chart_data_test() ->Result<Chart, KitchenSinkError> {
     tracing::debug!("[chart_data_test]");
     let json = r#"
         {

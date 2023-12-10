@@ -1,8 +1,8 @@
 //! common_lib...lib.rs
-use datafusion::dataframe::DataFrame;
+
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
-use crate::cb_ticker::{ProductId, Ticker};
+use crate::cb_ticker::{Ticker};
 use tokio::sync::oneshot;
 
 pub mod cb_ticker;
@@ -56,6 +56,6 @@ pub enum Msg {
 
 #[derive(Debug)]
 pub enum ChartType{
-    Basic,
+    BasicAsJson,
     Test
 }
