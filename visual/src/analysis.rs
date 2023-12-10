@@ -6,7 +6,7 @@ use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{Chart, ChartAsJson, ChartType, KitchenSinkError, Msg};
+use common_lib::{Chart, KitchenSinkError, Msg};
 
 
 pub async fn redirect_home() -> HttpResponse {

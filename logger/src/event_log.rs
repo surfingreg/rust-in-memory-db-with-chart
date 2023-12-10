@@ -185,8 +185,8 @@ impl EventLog {
     /// select * from table...but in raw Rust
     pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
         let slice = self.log.as_slice();
-        let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
-        let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
+        let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
+        let prices:Vec<f64> = self.log.iter().rev().map(|x| x.price).collect();
         tracing::info!("dates: {:?}", &dates);
         tracing::info!("prices: {:?}", &prices);
 
