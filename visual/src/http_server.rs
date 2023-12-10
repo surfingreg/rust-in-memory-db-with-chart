@@ -11,12 +11,7 @@ use handlebars::Handlebars;
 use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
-use crate::analysis::present_chart;
-// use crate::api_internals::request_index_data;
-// use crate::api_internals::request_index_data;
-
-
-
+use crate::analysis::present_chart_rust;
 
 // /// GET '/'
 // async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
@@ -87,7 +82,7 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                 App::new()
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
-                    .route("/", web::get().to(present_chart))
+                    .route("/", web::get().to(present_chart_rust))
                     // .route("/raw", web::get().to(get_raw))
                     // .route("/analysis", web::get().to(analysis::get_analysis))
                     // .route("/test", web::get().to(analysis::present_chart_test))

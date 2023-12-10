@@ -11,7 +11,7 @@ use logger::event_log::{EventBook, EventLog};
 use std::sync::Arc;
 use serde_json::Value;
 use tokio::runtime::Handle;
-use common_lib::{Chart, ChartType, KitchenSinkError, Msg};
+use common_lib::{ChartAsJson, ChartType, KitchenSinkError, Msg};
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
@@ -50,25 +50,38 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             Ok(())
         },
 
-        Msg::Post(ticker) => {
-            post_ticker(&ticker, evt_book);
+        Msg::Save(ticker) => {
+            save_ticker(&ticker, evt_book);
             run_calculations(&ticker.product_id.to_string(), evt_book);
             Ok(())
-        }
+        },
 
-        // Msg::GetChartForOne { key, sender } => {
-        //     tracing::debug!("[process_message] Msg::VisualGetOne:{}", &key);
-        //     todo!("send data back or delete this function")
-        //     // visual_data_one(&key.to_string(), evt_book, sender, tr);
-        // }
+        // TODO: unnecessary functionality right now to have a chart type subtype
+        Msg::RequestChartRust{sender} => {
+            let evt_book_read_lock = evt_book.book.read().unwrap();
 
-        // Msg::GetChartForAll { key, sender } => {
-        //     tracing::debug!("[process_message] Msg::VisualGetOne:{}", &key);
-        //     // visual_data_all(&key.to_string(), evt_book, tr);
-        //     todo!("send data back or delete this function")
-        // },
+            // TODO: hard-coded hashmap lookup key
+            let chart = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
+                Some(evt_log)=>{
+                    tr.block_on(async{
+                        evt_log.chart_data_rust_without_sql().await
+                    })
+                },
+                None=> Err(KitchenSinkError::DbError),
+            }?;
 
-        Msg::RequestChart{chart_type, sender} => {
+            tracing::info!("[returning chart] {:?}", &chart);
+
+            match sender.send(chart) {
+                Err(e)=> {
+                    tracing::error!("[Msg::RequestChartRust] {:?}", &e);
+                    Err(KitchenSinkError::SendError)
+                },
+                _ => Ok(()),
+            }
+        },
+
+        Msg::RequestChartJson{chart_type, sender} => {
             match chart_type{
                 ChartType::BasicAsJson => {
                     let evt_book_read_lock = evt_book.book.read().unwrap();
@@ -77,7 +90,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                     let json:Value = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
                         Some(evt_log)=>{
                             tr.block_on(async{
-                                evt_log.chart_data_without_sql().await
+                                evt_log.chart_data_as_json_without_sql().await
                             })
                         },
                         None=> Err(KitchenSinkError::DbError),
@@ -87,10 +100,8 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         Err(_e)=> Err(KitchenSinkError::SendError),
                         _ => Ok(()),
                     }
-                }
+                },
                 _ => Err(KitchenSinkError::NoMessageMatch),
-
-
             }
         },
 
@@ -101,24 +112,11 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
     }
 }
 
-// /// Get a read lock on the database. Block_on because already in it's own thread and cpu-intensive;
-// /// async isn't helpful here (in our in-memory case) but still dictated by DataFusion.
-// fn chart_data_without_sql(key: &str, evt_book: &EventBook, tr: Handle) -> Result<Value, KitchenSinkError> {
-//     let evt_book_read_lock = evt_book.book.read().unwrap();
-//     match evt_book_read_lock.get(key){
-//         Some(evt_log)=>{
-//             tr.block_on(async{
-//                 evt_log.chart_data_without_sql().await
-//             })
-//         },
-//         None=> Err(KitchenSinkError::DbError),
-//     }
-// }
 
 /// On database thread...
 /// get one long json string of symbols followed by the array of values for the corresponding dates
 /// [{"key" : "aapl", "val" : [0.5500, 0.2600, -1.4800, -3.1000, -0.4000, -0.9300, 0.6000, 10.2000, 0.0, -0.0700, 2.5700, 16.9800, 8.7600, 10.5500, 6.5800]}, {"key" : "amd", "val" : [1.7700, -0.1900, -2.6100, -1.5600, -3.7600, -0.3000, -1.0700, 3.0900, 0.0, 0.0, 0.0, 5.2600, 0.5400, 6.7300, 6.2800]}, {"key" : "amzn", "val" : [1.0800, -0.1500, -3.1700, -0.8400, -0.3900, 0.3200, -0.4500, -1.7300, -1.7300, 7.6700, 1.0500, 2.5700, 3.0600, 15.8200, 8.4800]}, {"key" : "bac", "val" : [-0.0800, -0.3600, -0.7800, -0.2300, -0.5000, -0.3300, -0.8100, -1.1500, 0.4800, -0.3700, -0.5700, 1.2300, -0.8900, -0.3700, 1.7800]}, {"key" : "bbai", "val" : [-0.0100, 0.0, -0.2400, -0.0700, -0.1200, -0.0600, 0.0100, -0.0400, -0.0200, -0.3900, 0.0100, 0.1600, -0.1100, -0.1800, 0.0900]}, {"key" : "intc", "val" : [0.1500, -0.3200, -1.4000, -0.8800, -0.2900, 0.4200, -1.1900, 0.0600, -0.9700, 1.6800, -0.5600, 2.4600, 0.6600, -0.6200, 10.2300]}, {"key" : "nio", "val" : [0.0800, -0.2600, -0.5100, -0.1900, -1.1500, -0.1700, -0.2600, -0.4500, -0.5400, 2.4800, 0.0500, 2.1300, -0.4600, -2.8700, 4.8700]}, {"key" : "pacw", "val" : [-0.1000, -0.2900, -0.6200, -0.1800, -0.2400, -0.2600, -0.3600, -0.4300, 0.0000, 0.3600, 0.0700, -0.2200, 0.0000, -0.9100, 0.2700]}, {"key" : "plug", "val" : [-0.1500, -0.0900, -0.6400, -0.3600, -0.4400, -0.1100, -0.4500, -1.0800, 0.4800, 0.4000, 0.0700, 1.6500, 0.1300, 0.0, 0.0]}, {"key" : "rivn", "val" : [0.2300, 0.0100, -0.2800, -0.6800, -0.7600, -0.3500, -1.5200, -0.5900, -0.7800, 3.6100, 1.7200, 3.9800, 2.6100, 1.4000, 1.9200]}, {"key" : "sofi", "val" : [-0.1000, -0.1400, -0.1600, -0.5200, -0.0500, -0.1500, -0.4300, -0.5500, -1.0700, 0.1800, -0.3800, -0.0100, 1.8700, 0.3100, 0.1800]}, {"key" : "t", "val" : [-0.1700, -0.1600, -0.3100, -0.2700, -0.2500, -0.1200, -0.3300, -0.3500, 0.1600, -0.0100, 0.2200, 0.0900, -0.3200, -0.1100, 0.1700]}, {"key" : "tsla", "val" : [1.1500, -0.2200, -3.0000, -7.6500, -1.2400, 8.8000, -1.7600, 9.5000, 5.0600, -2.0900, 10.1600, 23.5400, 3.6400, 8.5400, 2.2300]}, {"key" : "wbd", "val" : [-0.2000, -0.1000, -0.5000, -0.6200, -0.3200, -0.2300, -0.6100, -0.6100, 0.0100, -0.3700, 0.2300, 0.2300, 0.3400, 0.8700, 0.0]}]
-fn _chart_data_test() ->Result<Chart, KitchenSinkError> {
+fn _chart_data_test() ->Result<ChartAsJson, KitchenSinkError> {
     tracing::debug!("[chart_data_test]");
     let json = r#"
         {
@@ -132,7 +130,7 @@ fn _chart_data_test() ->Result<Chart, KitchenSinkError> {
         }
     "#;
 
-    match serde_json::from_str::<Chart>(json){
+    match serde_json::from_str::<ChartAsJson>(json){
         Ok(json) => {
             tracing::debug!("[chart_zero_data] json: {:?}", &json);
             Ok(json)
@@ -144,43 +142,8 @@ fn _chart_data_test() ->Result<Chart, KitchenSinkError> {
     }
 }
 
-
-
-// fn visual_data_one(key: &str, evt_book: &EventBook, sender: oneshot::Sender<VisualResultSet>, tr: Handle) {
-//     let evt_book_read_lock = evt_book.book.read().unwrap();
-//     let e_log_result = evt_book_read_lock.get(key);
-//
-//     match e_log_result {
-//         Some(evt_log) => {
-//             let result_set = tr.block_on(async {
-//                 match evt_log.calc_with_sql().await {
-//                     Ok(df) => VisualResultSet {
-//                         data: Some(df),
-//                         error: None,
-//                     },
-//                     Err(e) => VisualResultSet {
-//                         data: None,
-//                         error: Some(format!("[visual_data_for_one] error: {:?}", &e)),
-//                     },
-//                 }
-//             });
-//
-//             let _ = sender.send(result_set);
-//         }
-//         None => {
-//             tracing::error!("[visual_data_for_one] event log for {} doesn't exist yet", key);
-//             sender
-//                 .send(VisualResultSet {
-//                     data: None,
-//                     error: Some(format!("event log for {} doesn't exist yet", key)),
-//                 })
-//                 .unwrap();
-//         }
-//     }
-// }
-
 /// locks the event book to get the event log for the new ticker
-fn post_ticker(ticker: &Ticker, evt_book: &EventBook) {
+fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
     tracing::debug!("[arrow_db] POST {:?}", ticker);
     let _ = evt_book.push(&ticker.product_id.to_string(), ticker);
 }
@@ -209,10 +172,16 @@ fn run_calculations(key: &str, evt_book: &EventBook) {
     // evt_book.book.get(&ticker.product_id.to_string()).unwrap().
 }
 
+
+
+
+
+
+
 #[cfg(test)]
 mod tests{
 
-    use common_lib::{Chart};
+    use common_lib::{ChartAsJson};
 
     /// confirm the Chart object resolves from a known correct json string
     #[test]
@@ -230,7 +199,7 @@ mod tests{
         }
         "#;
 
-        match serde_json::from_str::<Chart>(json) {
+        match serde_json::from_str::<ChartAsJson>(json) {
             Ok(json) => {
                 println!("[json_test] json success: {:?}", &json);
             },
@@ -238,7 +207,7 @@ mod tests{
                 println!("[json_test] serde conversion error: {:?}", &e);
             },
         };
-        assert!(serde_json::from_str::<Chart>(json).is_ok());
+        assert!(serde_json::from_str::<ChartAsJson>(json).is_ok());
 
     }
 

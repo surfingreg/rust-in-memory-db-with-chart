@@ -1,5 +1,6 @@
 //! common_lib...lib.rs
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use crate::cb_ticker::{Ticker};
@@ -11,10 +12,24 @@ pub mod init;
 pub mod operator;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Chart{
+pub struct ChartAsJson {
     // chart_data: serde_json::Value
     pub columns: serde_json::Value,
     pub chart_data: serde_json::Value  // aka profit_total (daily)
+}
+
+// TODO: generalize
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChartData {
+    pub key:String,
+    pub val:Vec<f64>
+
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Chart {
+    pub columns: Vec<DateTime<Utc>>,
+    pub chart_data: Vec<ChartData>  // aka profit_total (daily)
 }
 
 #[derive(thiserror::Error)]
@@ -23,9 +38,8 @@ pub enum KitchenSinkError {
     DbError,
     JsonError,
     Serde,
-    ChannelError,
-    SendError,
     RecvError,
+    SendError,
     NoMessageMatch,
 }
 
@@ -34,28 +48,20 @@ pub enum KitchenSinkError {
 #[derive(Debug)]
 pub enum Msg {
     // Post(T),
-    Post(Ticker),
+    Save(Ticker),
     // PostAndLog(T),
     Ping,
     Pong,
     Start,
     Stop,
-    // GetChartForOne {
-    //     key: ProductId,
-    //     sender: oneshot::Sender<VisualResultSet>,
-    // },
-    // GetChartForAll {
-    //     key: ProductId,
-    //     sender: oneshot::Sender<VisualResultSet>,
-    // },
-    // TODO: pass a chart type with a single message instead of many possible messages
-    RequestChart{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
-    // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<Chart> },
+    RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
+    RequestChartRust{sender: oneshot::Sender<Chart> },
 
 }
 
 #[derive(Debug)]
 pub enum ChartType{
     BasicAsJson,
+    BasicAsRust,
     Test
 }

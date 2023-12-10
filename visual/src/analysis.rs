@@ -6,7 +6,7 @@ use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{Chart, ChartType, KitchenSinkError, Msg};
+use common_lib::{Chart, ChartAsJson, ChartType, KitchenSinkError, Msg};
 
 
 pub async fn redirect_home() -> HttpResponse {
@@ -21,21 +21,18 @@ pub async fn redirect_home() -> HttpResponse {
 }
 
 
-pub async fn present_chart(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+/// TODO: is converting to json even necessary here?
+pub async fn present_chart_rust(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     tracing::debug!("[present_chart]");
     let tx_db = tx_db.into_inner().as_ref().clone();
+    let chart_0_json_result = request_chart_rust(tx_db).await;
 
-    // TODO: this is dumb, convert to json, then convert it back to struct then immediate back to json????
-    // get data in json format (totally unnecessary)
-    let chart_0_json_result = request_chart(ChartType::BasicAsJson, tx_db).await;
-    if chart_0_json_result.is_ok() {
+    match chart_0_json_result {
+        Ok(chart_0)=> {
+            let chart_0_columns = serde_json::to_string(&chart_0.columns).unwrap();
+            let chart_0_data = serde_json::to_string(&chart_0.chart_data).unwrap();
 
-        // struct back to json for handlebars
-        let chart_0:Chart = serde_json::from_value::<Chart>(chart_0_json_result.unwrap()).unwrap();
-        let chart_0_columns = serde_json::to_string(&chart_0.columns).unwrap();
-        let chart_0_data = serde_json::to_string(&chart_0.chart_data).unwrap();
-
-        let data = json!({
+            let data = json!({
                 "title": "Analysis",
                 "parent": "base0",
                 "is_logged_in": true,
@@ -43,30 +40,87 @@ pub async fn present_chart(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handleba
                 "chart_0_columns": chart_0_columns,
                 "chart_0_data": chart_0_data,
             });
-        let body = hb.render("analysis", &data).unwrap();
-        HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
-    } else {
-        // TODO: figure out how to do a match with two results
-        tracing::error!("[get_analysis] database error getting chart data");
-        redirect_home().await
+            let body = hb.render("analysis", &data).unwrap();
+            HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+        },
+        Err(e)=>{
+            // TODO: figure out how to do a match with two results
+            tracing::error!("[present_chart_rust] database error getting chart data: {:?}", e);
+            redirect_home().await
+        }
     }
 }
-
 
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch
-async fn request_chart(chart_type: ChartType, tx_db:Sender<Msg>) -> Result<serde_json::Value, KitchenSinkError> {
-    let (sender, rx) = oneshot::channel::<serde_json::Value>();
-    match tx_db.send(Msg::RequestChart {chart_type: chart_type, sender: sender}) {
+async fn request_chart_rust(tx_db:Sender<Msg>) -> Result<Chart, KitchenSinkError> {
+    let (sender, rx) = oneshot::channel();
+    match tx_db.send(Msg::RequestChartRust{sender}) {
         Ok(_)=> {
             match rx.await {
                 Ok(chart) => Ok(chart),
-                Err(_) => Err(KitchenSinkError::ChannelError),
+                Err(e) => {
+                    tracing::error!("[request_chart_rust] {:?}", &e);
+                    Err(KitchenSinkError::RecvError)
+                },
             }
         },
-        Err(_)=>Err(KitchenSinkError::ChannelError),
+        Err(_)=>Err(KitchenSinkError::SendError),
     }
 }
+
+
+
+//
+// pub async fn _present_chart(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+//     tracing::debug!("[present_chart]");
+//     let tx_db = tx_db.into_inner().as_ref().clone();
+//
+//     // TODO: this is dumb, convert to json, then convert it back to struct then immediate back to json????
+//     // get data in json format (totally unnecessary)
+//     let chart_0_json_result = _request_chart_json(ChartType::BasicAsJson, tx_db).await;
+//     if chart_0_json_result.is_ok() {
+//
+//         // struct back to json for handlebars
+//         let chart_0: ChartAsJson = serde_json::from_value::<ChartAsJson>(chart_0_json_result.unwrap()).unwrap();
+//         let chart_0_columns = serde_json::to_string(&chart_0.columns).unwrap();
+//         let chart_0_data = serde_json::to_string(&chart_0.chart_data).unwrap();
+//
+//         let data = json!({
+//                 "title": "Analysis",
+//                 "parent": "base0",
+//                 "is_logged_in": true,
+//                 // "session_username": &session_username,
+//                 "chart_0_columns": chart_0_columns,
+//                 "chart_0_data": chart_0_data,
+//             });
+//         let body = hb.render("analysis", &data).unwrap();
+//         HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+//     } else {
+//         // TODO: figure out how to do a match with two results
+//         tracing::error!("[_present_chart] database error getting chart data");
+//         redirect_home().await
+//     }
+// }
+
+//
+// /// Ask the database for data for the chart
+// /// TODO: add an enum for the kind of chart to fetch
+// async fn _request_chart_json(chart_type: ChartType, tx_db:Sender<Msg>) -> Result<serde_json::Value, KitchenSinkError> {
+//     let (sender, rx) = oneshot::channel::<serde_json::Value>();
+//     match tx_db.send(Msg::RequestChartJson{chart_type, sender}) {
+//         Ok(_)=> {
+//             match rx.await {
+//                 Ok(chart) => Ok(chart),
+//                 Err(_) => Err(KitchenSinkError::RecvError),
+//             }
+//         },
+//         Err(_)=>Err(KitchenSinkError::RecvError),
+//     }
+// }
+
+
+
 /*
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch

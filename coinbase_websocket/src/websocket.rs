@@ -50,7 +50,7 @@ fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx: Sender<Msg>) {
                     }
                     Coinbase::Ticker(t) => {
                         // tracing::debug!("[Coinbase::Ticker] {:?}", &t);
-                        if let Err(e) = tx.send(Msg::Post(t)) {
+                        if let Err(e) = tx.send(Msg::Save(t)) {
                             tracing::error!("[ws_process] send error: {:?}", &e);
                         }
                     }

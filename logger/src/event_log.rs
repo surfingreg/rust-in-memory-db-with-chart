@@ -5,7 +5,7 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use common_lib::cb_ticker::Ticker;
+use common_lib::cb_ticker::{ProductId, Ticker};
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
@@ -17,7 +17,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
-use common_lib::KitchenSinkError;
+use common_lib::{Chart, ChartData, KitchenSinkError};
+
 
 /// Container for multiple event logs keyed by a string
 pub struct EventBook {
@@ -28,6 +29,7 @@ impl Default for EventBook {
         Self::new()
     }
 }
+
 impl EventBook {
     pub fn new() -> EventBook {
         EventBook {
@@ -159,17 +161,13 @@ impl EventLog {
         }
     }
 
-    /// select * from table
-    pub async fn chart_data_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
-
+    /// select * from table...but in raw Rust
+    pub async fn chart_data_as_json_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
         let slice = self.log.as_slice();
-
         let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
         let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
-
         tracing::info!("dates: {:?}", &dates);
         tracing::info!("prices: {:?}", &prices);
-
         let json = serde_json::json!({
             "columns": dates,
             "chart_data":[
@@ -179,14 +177,32 @@ impl EventLog {
                 }
             ]
         });
-
         // json: Object {"chart_data": Array [Object {"key": String("BTC"), "prices": Array [Number(44203.49), Number(44202.91), Number(44203.35), Number(44203.35), Number(44203.63), Number(44203.63)]}], "columns": Array [String("2023-12-09T00:42:13.031827Z"), String("2023-12-09T00:42:12.268100Z"), String("2023-12-09T00:42:11.456841Z"), String("2023-12-09T00:42:11.453783Z"), String("2023-12-09T00:42:10.996591Z"), String("2023-12-09T00:42:10.996591Z")]}
         tracing::info!("json: {:?}", &json);
-
         Ok(json)
+    }
 
+    /// select * from table...but in raw Rust
+    pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
+        let slice = self.log.as_slice();
+        let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
+        let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
+        tracing::info!("dates: {:?}", &dates);
+        tracing::info!("prices: {:?}", &prices);
+
+        // TODO: hard-coded key
+        let cd = ChartData{
+            key: ProductId::BtcUsd.to_string(),
+            val:prices,
+        };
+
+        Ok(Chart {
+            columns: dates,
+            chart_data: vec!(cd),
+        })
 
     }
+
 
     /// select * from table
     pub async fn query_sql_for_chart(&self) -> datafusion::error::Result<DataFrame> {
