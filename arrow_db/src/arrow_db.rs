@@ -105,6 +105,42 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             }
         },
 
+
+
+
+
+
+        // send a DataFrame back with 'select * from ..."
+        Msg::GetRaw {sender}=>{
+
+            let evt_book_read_lock = evt_book.book.read().unwrap();
+
+            let df = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
+                Some(evt_log)=>{
+
+                    let df_result = tr.block_on(async{
+                        evt_log.query_sql_for_chart().await
+                    });
+                    match df_result{
+                        Ok(df)=>Ok(df),
+                        Err(e)=>{
+                            tracing::error!("{:?}", e);
+                            Err(KitchenSinkError::DbError)
+                        }
+                    }
+                },
+                None=> Err(KitchenSinkError::DbError),
+            }?;
+
+            match sender.send(df) {
+                Err(_e)=> Err(KitchenSinkError::SendError),
+                _ => Ok(()),
+            }
+
+
+
+        }
+
         _ => {
             tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message);
             Err(KitchenSinkError::NoMessageMatch)

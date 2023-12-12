@@ -1,6 +1,7 @@
 //! common_lib...lib.rs
 
 use chrono::{DateTime, Utc};
+use datafusion::dataframe::DataFrame;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use crate::cb_ticker::{Ticker};
@@ -56,6 +57,8 @@ pub enum Msg {
     Stop,
     RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
     RequestChartRust{sender: oneshot::Sender<Chart> },
+
+    GetRaw{sender: oneshot::Sender<DataFrame> },
 
 }
 

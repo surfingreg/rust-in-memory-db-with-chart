@@ -12,11 +12,13 @@ use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
 use crate::analysis::present_chart_rust;
+use crate::api_internals::request_index_data;
 
-// /// GET '/'
-// async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
-//     request_index_data(tx).await
-// }
+
+/// GET '/raw'
+async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
+    request_index_data(tx).await
+}
 
 
 /// start actix in a new blocking thread
@@ -83,7 +85,7 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
                     .route("/", web::get().to(present_chart_rust))
-                    // .route("/raw", web::get().to(get_raw))
+                    .route("/raw", web::get().to(get_raw))
                     // .route("/analysis", web::get().to(analysis::get_analysis))
                     // .route("/test", web::get().to(analysis::present_chart_test))
                     .route("/js/chart.js", web::get().to(get_chart_js))

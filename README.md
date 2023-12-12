@@ -26,3 +26,4 @@ Obviously parsing SQL on the fly is no joke. And, would never compete with compi
 - [] Convert current Coinbase example into an example
 - [] Save previously calculated averages in a secondary in-memory vector
 - [] Display the current and average price in frontend chart
+- [] Get rid of EventBook; save all product-id in the same table instead of a separate one (to exercise SQL, ask if index is needed)
