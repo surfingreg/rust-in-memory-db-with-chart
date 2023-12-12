@@ -17,7 +17,7 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
-use common_lib::{Chart, Chart2, ChartData, ChartData2, KitchenSinkError};
+use common_lib::{Chart2, ChartData2, KitchenSinkError};
 
 
 
@@ -65,74 +65,79 @@ impl EventLog {
 
     }
 
-    /// select * from table...but in raw Rust
-    pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
-        let slice = self.log.as_slice();
-
-        // TODO: the columns have to be generalized over all the charts
-        let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
-
-        let mut chart_data:Vec<ChartData> = vec!();
-
-        for stock in ProductId::iter() {
-
-            // TODO: the separate "keys" have to be separated with their data from the other keys into separate arrays
-
-            // TODO filter by product_id
-            let prices: Vec<f64> = self.log.iter().rev()
-                .filter(|x| x.product_id == stock)
-                .map(|x| x.price).collect();
-
-            let cd = ChartData {
-                key: stock.to_string(),
-                val: prices,
-            };
-
-            chart_data.push(cd);
-        }
-
-        // tracing::info!("dates: {:?}", &dates);
-        // tracing::info!("prices: {:?}", &prices);
-
-        // TODO: de-duplicate where there are multiple products at the exact same time
-        Ok(Chart {
-            columns: dates,
-            chart_data,
-        })
-
-    }
 
     /// select * from table...but in raw Rust
+    /// Prep for structure chartjs expects
     pub async fn chart_data_rust_without_sql2(&self) -> Result<Vec<Chart2>, KitchenSinkError>  {
-
         let mut data:Vec<Chart2> = vec!();
+        for product in ProductId::iter() {
 
-        for stock in ProductId::iter() {
-
-            // let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
-            //
-            // let prices: Vec<f64> = self.log.iter().rev()
-            //     .filter(|x| x.product_id == stock)
-            //     .map(|x| x.price).collect();
-
-            let z:Vec<ChartData2> = self.log.iter().rev()
-                .filter(|data_point| data_point.product_id == stock)
+            // separate products into their own datasets (basically 'group by product_id')
+            let time_series_data: Vec<ChartData2> = self.log.iter().rev()
+                .filter(|f| f.product_id == product)
                 .map(|x|{
                     ChartData2{ x: x.dtg, y: x.price }
-                }
-            ).collect();
-
+                })
+                .collect();
             let chart = Chart2{
-                label: stock.to_string(),
-                data: z,
+                label: product.to_string(),
+                data: time_series_data,
             };
-
             data.push(chart);
         }
-
         Ok(data)
-
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    //
+    // /// select * from table...but in raw Rust
+    // pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
+    //     let slice = self.log.as_slice();
+    //
+    //     // TODO: the columns have to be generalized over all the charts
+    //     let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
+    //
+    //     let mut chart_data:Vec<ChartData> = vec!();
+    //
+    //     for stock in ProductId::iter() {
+    //
+    //         // TODO: the separate "keys" have to be separated with their data from the other keys into separate arrays
+    //
+    //         // TODO filter by product_id
+    //         let prices: Vec<f64> = self.log.iter().rev()
+    //             .filter(|x| x.product_id == stock)
+    //             .map(|x| x.price).collect();
+    //
+    //         let cd = ChartData {
+    //             key: stock.to_string(),
+    //             val: prices,
+    //         };
+    //
+    //         chart_data.push(cd);
+    //     }
+    //
+    //     // tracing::info!("dates: {:?}", &dates);
+    //     // tracing::info!("prices: {:?}", &prices);
+    //
+    //     // TODO: de-duplicate where there are multiple products at the exact same time
+    //     Ok(Chart {
+    //         columns: dates,
+    //         chart_data,
+    //     })
+    //
+    // }
 
 
 
@@ -268,7 +273,7 @@ impl EventLog {
     }
 
     /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
-    pub fn calc_curve_diff(&self, curve_n0: usize, curve_n1: usize) {
+    pub fn calc_curve_diff_rust(&self, curve_n0: usize, curve_n1: usize) {
         let start = Instant::now();
         let avg_0 = self.avg_recent_n(curve_n0).unwrap();
         let avg_1 = self.avg_recent_n(curve_n1).unwrap();
@@ -292,6 +297,9 @@ impl EventLog {
             log_count,
             start.elapsed().as_micros() as f64 / 1000.0
         );
+
+        
+
     }
 
     /// Compute the average of the last N prices

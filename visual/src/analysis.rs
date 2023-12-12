@@ -7,7 +7,7 @@ use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{Chart, Chart2, KitchenSinkError, Msg};
+use common_lib::{Chart2, KitchenSinkError, Msg};
 
 const CHART_MULTI_NAME:&str = "chart_multi";
 
@@ -26,15 +26,17 @@ pub async fn redirect_home() -> HttpResponse {
 pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     tracing::debug!("[present_chart]");
     let tx_db = tx_db.into_inner().as_ref().clone();
+
     match request_chart_2(tx_db).await {
         Ok(vec_chart2)=> {
 
             match serde_json::to_string(&vec_chart2) {
                 Ok(data_vec_json) =>{
                     let data = json!({
-                        "title": "Analysis",
+                        "title": "Page Title (analysis.rs)",
                         "parent": "base0",
                         "is_logged_in": true,
+                        "chart_title": "TEST (see analysis.rs)",
                         "data_vec": data_vec_json,
                     });
                     let body = hb.render(CHART_MULTI_NAME, &data).unwrap();
@@ -55,36 +57,36 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
 
 
 
-/// TODO: use flatbuffers or something instead of json
-pub async fn present_chart_rust(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
-    tracing::debug!("[present_chart]");
-    let tx_db = tx_db.into_inner().as_ref().clone();
-    let chart_0_json_result = request_chart_rust(tx_db).await;
-
-    match chart_0_json_result {
-        Ok(chart_0)=> {
-            let chart_0_columns = serde_json::to_string(&chart_0.columns).unwrap();
-            let chart_0_data = serde_json::to_string(&chart_0.chart_data).unwrap();
-
-            let data = json!({
-                "title": "Analysis",
-                "parent": "base0",
-                "is_logged_in": true,
-                // "session_username": &session_username,
-                "chart_0_columns": chart_0_columns,
-                // "chart_0_columns": &chart_0.columns,
-                "chart_0_data": chart_0_data,
-            });
-            let body = hb.render("analysis", &data).unwrap();
-            HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
-        },
-        Err(e)=>{
-            // TODO: figure out how to do a match with two results
-            tracing::error!("[present_chart_rust] database error getting chart data: {:?}", e);
-            redirect_home().await
-        }
-    }
-}
+// /// TODO: use flatbuffers or something instead of json
+// pub async fn present_chart_rust(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+//     tracing::debug!("[present_chart]");
+//     let tx_db = tx_db.into_inner().as_ref().clone();
+//     let chart_0_json_result = request_chart_rust(tx_db).await;
+//
+//     match chart_0_json_result {
+//         Ok(chart_0)=> {
+//             let chart_0_columns = serde_json::to_string(&chart_0.columns).unwrap();
+//             let chart_0_data = serde_json::to_string(&chart_0.chart_data).unwrap();
+//
+//             let data = json!({
+//                 "title": "Analysis",
+//                 "parent": "base0",
+//                 "is_logged_in": true,
+//                 // "session_username": &session_username,
+//                 "chart_0_columns": chart_0_columns,
+//                 // "chart_0_columns": &chart_0.columns,
+//                 "chart_0_data": chart_0_data,
+//             });
+//             let body = hb.render("analysis", &data).unwrap();
+//             HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+//         },
+//         Err(e)=>{
+//             // TODO: figure out how to do a match with two results
+//             tracing::error!("[present_chart_rust] database error getting chart data: {:?}", e);
+//             redirect_home().await
+//         }
+//     }
+// }
 
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch
@@ -99,23 +101,23 @@ async fn request_chart_2(tx_db:Sender<Msg>) -> Result<Vec<Chart2>, Box<dyn Error
     }
 }
 
-/// Ask the database for data for the chart
-/// TODO: add an enum for the kind of chart to fetch
-async fn request_chart_rust(tx_db:Sender<Msg>) -> Result<Chart, KitchenSinkError> {
-    let (sender, rx) = oneshot::channel();
-    match tx_db.send(Msg::RequestChartRust{sender}) {
-        Ok(_)=> {
-            match rx.await {
-                Ok(chart) => Ok(chart),
-                Err(e) => {
-                    tracing::error!("[request_chart_rust] {:?}", &e);
-                    Err(KitchenSinkError::RecvError)
-                },
-            }
-        },
-        Err(_)=>Err(KitchenSinkError::SendError),
-    }
-}
+// /// Ask the database for data for the chart
+// /// TODO: add an enum for the kind of chart to fetch
+// async fn request_chart_rust(tx_db:Sender<Msg>) -> Result<Chart, KitchenSinkError> {
+//     let (sender, rx) = oneshot::channel();
+//     match tx_db.send(Msg::RequestChartRust{sender}) {
+//         Ok(_)=> {
+//             match rx.await {
+//                 Ok(chart) => Ok(chart),
+//                 Err(e) => {
+//                     tracing::error!("[request_chart_rust] {:?}", &e);
+//                     Err(KitchenSinkError::RecvError)
+//                 },
+//             }
+//         },
+//         Err(_)=>Err(KitchenSinkError::SendError),
+//     }
+// }
 
 
 

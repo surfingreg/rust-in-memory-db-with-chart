@@ -24,16 +24,10 @@
 
 
 <script>
-
-
-    console.log("*****[chart2.html]*****");
-
     const c = '{{data_vec}}';
-    var json = JSON.parse(c.replace(/&quot;/g, '\"'));
-    console.log("json: " + json);
-    console.log("j[0] label: " + json[0].label);
-
-
+    let json = JSON.parse(c.replace(/&quot;/g, '\"'));
+    // console.log("json: " + json);
+    // console.log("j[0] label: " + json[0].label);
     const rust_datasets = [];
 
     for (let i in json){
@@ -43,26 +37,30 @@
         //     console.log("data: " + data_i[j].x + ": " + data_i[j].y);
         // }
 
-        var s = {
+        let s = {
             label: json[i].label,
             borderColor: 'blue',
             data: json[i].data
         };
-        rust_datasets.push(s);
+
+        // UI filter: only show BTC for now (even though there's data for more)
+        if(s.label === "btc_usd"){
+            rust_datasets.push(s);
+        }
 
     }
 
     // ***** dataset format test ****
-    console.log("datasets count: " + rust_datasets.length);
-    for (let i in rust_datasets){
-        console.log("dataset[" + i + "]: " + rust_datasets[i].label);
-        console.log("dataset[" + i + "]: " + rust_datasets[i].data);
-
-        const data_i = rust_datasets[i].data;
-        for(let j in data_i){
-            console.log("data: " + data_i[j].x + ": " + data_i[j].y);
-        }
-    }
+    // console.log("datasets count: " + rust_datasets.length);
+    // for (let i in rust_datasets){
+    //     console.log("dataset[" + i + "]: " + rust_datasets[i].label);
+    //     console.log("dataset[" + i + "]: " + rust_datasets[i].data);
+    //
+    //     const data_i = rust_datasets[i].data;
+    //     for(let j in data_i){
+    //         console.log("data: " + data_i[j].x + ": " + data_i[j].y);
+    //     }
+    // }
     // ***** END dataset format test ****
 
 
@@ -84,16 +82,37 @@
     //     ]
     // };
 
-    var ctx = document.getElementById('chart_0').getContext('2d');
-    var chart = new Chart(ctx, {
+    let ctx = document.getElementById('chart_0').getContext('2d');
+    let chart_title = '{{chart_title}}';
+    let chart = new Chart(ctx, {
         type: 'line',
         // data: { datasets: [s1, s2] },
         data: { datasets: rust_datasets },
         options: {
+            animation: {
+                duration: 0
+            },
+            responsive: true,   // resize to fit browser window
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            stacked: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: chart_title
+                }
+            },
             scales: {
                 x: {
                     type: 'time'
-                }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                },
             }
         }
     });

@@ -60,35 +60,33 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             Ok(())
         },
 
-        // TODO: unnecessary functionality right now to have a chart type subtype
-        Msg::RequestChartRust{sender} => {
-            let evt_book_read_lock = evt_book.book.read().unwrap();
-
-            // TODO: hard-coded hashmap lookup key
-            let chart = match evt_book_read_lock.get(EVT_LOG_TABLE){
-                Some(evt_log)=>{
-                    tr.block_on(async{
-                        evt_log.chart_data_rust_without_sql().await
-                    })
-                },
-                None=> Err(KitchenSinkError::DbError),
-            }?;
-
-            tracing::info!("[returning chart] {:?}", &chart);
-
-            match sender.send(chart) {
-                Err(e)=> {
-                    tracing::error!("[Msg::RequestChartRust] {:?}", &e);
-                    Err(KitchenSinkError::SendError)
-                },
-                _ => Ok(()),
-            }
-        },
+        // // TODO: unnecessary functionality right now to have a chart type subtype
+        // Msg::RequestChartRust{sender} => {
+        //     let evt_book_read_lock = evt_book.book.read().unwrap();
+        //
+        //     // TODO: hard-coded hashmap lookup key
+        //     let chart = match evt_book_read_lock.get(EVT_LOG_TABLE){
+        //         Some(evt_log)=>{
+        //             tr.block_on(async{
+        //                 evt_log.chart_data_rust_without_sql().await
+        //             })
+        //         },
+        //         None=> Err(KitchenSinkError::DbError),
+        //     }?;
+        //
+        //     tracing::info!("[returning chart] {:?}", &chart);
+        //
+        //     match sender.send(chart) {
+        //         Err(e)=> {
+        //             tracing::error!("[Msg::RequestChartRust] {:?}", &e);
+        //             Err(KitchenSinkError::SendError)
+        //         },
+        //         _ => Ok(()),
+        //     }
+        // },
 
         Msg::RequestChart2{sender} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
-
-            // TODO: hard-coded hashmap lookup key
             let chart = match evt_book_read_lock.get(EVT_LOG_TABLE){
                 Some(evt_log)=>{
                     tr.block_on(async{
@@ -221,8 +219,8 @@ fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
 fn run_calculations(key: &str, evt_book: &EventBook) {
     let evt_book_read_lock = evt_book.book.read().unwrap();
     let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
-    evt_log.calc_curve_diff(4, 100);
-    evt_log.calc_curve_diff(4, 300);
+    evt_log.calc_curve_diff_rust(4, 100);
+    evt_log.calc_curve_diff_rust(4, 300);
     // evt_log.calc_curve_diff(4, 500);
     // evt_log.calc_curve_diff(20, 100);
     // evt_log.calc_curve_diff(20, 300);
