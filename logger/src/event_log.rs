@@ -123,6 +123,34 @@ impl EventLog {
 
     }
 
+    /// select * from table...but in raw Rust
+    pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
+        let slice = self.log.as_slice();
+        let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
+        let prices:Vec<f64> = self.log.iter().rev().map(|x| x.price).collect();
+        tracing::info!("dates: {:?}", &dates);
+        tracing::info!("prices: {:?}", &prices);
+
+        // TODO: loop here to collect multiple keys
+        let cd = ChartData{
+            key: ProductId::BtcUsd.to_string(),
+            val:prices,
+        };
+
+        // TODO: de-duplicate where there are multiple products at the exact same time
+        Ok(Chart {
+            columns: dates,
+            chart_data: vec!(cd),
+        })
+
+    }
+
+
+
+
+
+
+
     pub fn schema() -> Schema {
         Schema::new(vec![
             Field::new("dtg", DataType::Date64, false),
@@ -162,6 +190,8 @@ impl EventLog {
     }
 
     /// select * from table...but in raw Rust
+    ///
+    /// TODO: hard-coded BTC
     pub async fn chart_data_as_json_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
         let slice = self.log.as_slice();
         let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
@@ -182,28 +212,6 @@ impl EventLog {
         Ok(json)
     }
 
-    /// select * from table...but in raw Rust
-    pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
-        let slice = self.log.as_slice();
-        let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
-        let prices:Vec<f64> = self.log.iter().rev().map(|x| x.price).collect();
-        tracing::info!("dates: {:?}", &dates);
-        tracing::info!("prices: {:?}", &prices);
-
-        // TODO: hard-coded key
-        let cd = ChartData{
-            key: ProductId::BtcUsd.to_string(),
-            val:prices,
-        };
-
-        Ok(Chart {
-            columns: dates,
-            chart_data: vec!(cd),
-        })
-
-    }
-
-
     /// select * from table
     pub async fn query_sql_for_chart(&self) -> datafusion::error::Result<DataFrame> {
         let mem_batch = self.record_batch().unwrap();
@@ -219,7 +227,6 @@ impl EventLog {
 
         Ok(df.clone())
     }
-
 
     /// select * from table
     pub async fn query_sql_all(&self) -> datafusion::error::Result<DataFrame> {

@@ -7,9 +7,12 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::net::TcpStream;
 use std::thread::JoinHandle;
+use strum::IntoEnumIterator;
+
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 use url::Url;
+use common_lib::cb_ticker::ProductId;
 use common_lib::Msg;
 
 /// Start a new thread listening to the coinbase websocket
@@ -106,9 +109,15 @@ pub struct Subscribe {
 }
 
 fn generate_websocket_subscribe_json() -> serde_json::Value {
+
+    let prod_ids = ProductId::iter().map(|x|{x.to_string_coinbase()}).collect();
+
+
     let cb_sub = Subscribe {
         typ: "subscribe".to_owned(),
-        product_ids: vec!["BTC-USD".to_owned()],
+        // product_ids: vec!["BTC-USD".to_owned()],
+        // product_ids: vec![ProductId::BtcUsd.to_string_coinbase()],
+        product_ids: prod_ids,
         // channels:vec!["ticker".to_owned(), "level2".to_owned(), "user".to_owned()]
         // channels:vec!["ticker".to_owned(), "level2".to_owned()]
         channels: vec!["ticker".to_owned()],
