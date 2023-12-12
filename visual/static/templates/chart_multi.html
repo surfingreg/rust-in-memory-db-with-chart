@@ -26,32 +26,32 @@
 <script>
     const c = '{{data_vec}}';
     let json = JSON.parse(c.replace(/&quot;/g, '\"'));
-    // console.log("json: " + json);
-    // console.log("j[0] label: " + json[0].label);
+    console.log("json: " + json);
+    console.log("j[0] label: " + json[0].label);
     const rust_datasets = [];
 
     for (let i in json){
-        // console.log("label(" + i + "): " + json[i].label);
-        // const data_i = json[i].data;
-        // for(let j in data_i){
-        //     console.log("data: " + data_i[j].x + ": " + data_i[j].y);
-        // }
+        console.log("label(" + i + "): " + json[i].label);
+        const data_i = json[i].data;
+        for(let j in data_i){
+            console.log("data: " + data_i[j].x + ": " + data_i[j].y);
+        }
 
         let s = {
             label: json[i].label,
-            borderColor: 'blue',
+            // borderColor: 'blue',
             data: json[i].data
         };
 
         // UI filter: only show BTC for now (even though there's data for more)
-        if(s.label === "btc_usd"){
+        if(!s.label.startsWith("eth")){
             rust_datasets.push(s);
         }
 
     }
 
     // ***** dataset format test ****
-    // console.log("datasets count: " + rust_datasets.length);
+    console.log("datasets count: " + rust_datasets.length);
     // for (let i in rust_datasets){
     //     console.log("dataset[" + i + "]: " + rust_datasets[i].label);
     //     console.log("dataset[" + i + "]: " + rust_datasets[i].data);

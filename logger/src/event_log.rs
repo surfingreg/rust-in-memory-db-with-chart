@@ -5,7 +5,7 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use common_lib::cb_ticker::{ProductId, Ticker};
+use common_lib::cb_ticker::{Ticker, TickerCalc};
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
@@ -17,18 +17,21 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
-use common_lib::{Chart2, ChartData2, KitchenSinkError};
+use common_lib::{CalculationId, Chart2, ChartData2, KitchenSinkError, ProductId};
 
 
 
 #[allow(dead_code)]
 const RING_BUF_SIZE: usize = 100;
+const NUM_CALCS: usize = 4;
+
 
 /// Ring buffer with ability to extract the entire buffer as a slice
 /// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
 pub struct EventLog {
-    // log: Arc<RwLock<SliceRingBuffer<Ticker>>>
     log: SliceRingBuffer<Ticker>,
+    calc_log: SliceRingBuffer<TickerCalc>,
+
 }
 
 impl Default for EventLog {
@@ -43,6 +46,7 @@ impl EventLog {
         EventLog {
             // log: Arc::new(RwLock::new(SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE))),
             log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
+            calc_log: SliceRingBuffer::<TickerCalc>::with_capacity(NUM_CALCS * RING_BUF_SIZE),
         }
     }
 
@@ -59,8 +63,16 @@ impl EventLog {
 
 
     /// push into this custom event log; thread safe
-    pub fn push(&mut self, ticker: &Ticker) -> Result<(), EventLogError> {
+    pub fn push_log(&mut self, ticker: &Ticker) -> Result<(), EventLogError> {
         self.log.push_front((*ticker).clone());
+        Ok(())
+
+    }
+
+    /// push into this custom event log; thread safe
+    pub fn push_calc(&mut self, ticker: &TickerCalc) -> Result<(), EventLogError> {
+        // tracing::debug!("[push_calc]");
+        self.calc_log.push_front((*ticker).clone());
         Ok(())
 
     }
@@ -68,27 +80,134 @@ impl EventLog {
 
     /// select * from table...but in raw Rust
     /// Prep for structure chartjs expects
-    pub async fn chart_data_rust_without_sql2(&self) -> Result<Vec<Chart2>, KitchenSinkError>  {
+    pub async fn chart_multi_from_rust(&self) -> Result<Vec<Chart2>, KitchenSinkError>  {
         let mut data:Vec<Chart2> = vec!();
-        for product in ProductId::iter() {
 
-            // separate products into their own datasets (basically 'group by product_id')
+        // "...group by product_id..."
+        for prod_id in ProductId::iter() {
+
+            // separate products from the event log into datasets for the chart
+            // (basically 'group by product_id')
             let time_series_data: Vec<ChartData2> = self.log.iter().rev()
-                .filter(|f| f.product_id == product)
+                .filter(|f| f.product_id == prod_id)
                 .map(|x|{
                     ChartData2{ x: x.dtg, y: x.price }
                 })
                 .collect();
             let chart = Chart2{
-                label: product.to_string(),
+                label: prod_id.to_string(),
                 data: time_series_data,
             };
             data.push(chart);
+
+
+            // "...group by product_id, calculation_id..."
+            for calc_id in CalculationId::iter(){
+                // grouped by product ID
+                let time_series_f64: Vec<ChartData2> = self.calc_log.iter().rev()
+                    .filter(|f| f.prod_id == prod_id && f.calc_id == calc_id)
+                    .map(|x|{
+                        ChartData2{ x: x.dtg, y: x.val }
+                    })
+                    .collect();
+
+                let chart = Chart2{
+                    label: format!("{}_{}", prod_id.to_string(), calc_id.to_string()),
+                    data: time_series_f64,
+                };
+                data.push(chart);
+            }
         }
         Ok(data)
     }
 
 
+    /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
+    pub fn calc_curve_diff_rust(&self, curve_n0: CalculationId, curve_n1: CalculationId, prod_id:ProductId)->(TickerCalc, TickerCalc)  {
+        // tracing::debug!("[calc_curve_diff_rust]");
+        let start = Instant::now();
+        let calc0 = self.calculate_moving_avg_n(&curve_n0, prod_id.clone()).unwrap();
+        let calc1 = self.calculate_moving_avg_n(&curve_n1, prod_id).unwrap();
+        let avg_0 = calc0.val;
+        let avg_1 = calc1.val;
+        let diff = avg_0 - avg_1;
+        let graphic = match diff {
+            d if d >= 0.0 => "+++++",
+            d if d < 0.0 => "-----",
+            _ => "-----",
+        };
+
+        let log_count = self.len();
+        tracing::debug!(
+            "[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms",
+            &curve_n0.value(),
+            &curve_n1.value(),
+            diff,
+            &curve_n0.value(),
+            avg_0,
+            &curve_n1.value(),
+            avg_1,
+            log_count,
+            start.elapsed().as_micros() as f64 / 1000.0
+        );
+
+        (calc0, calc1)
+
+    }
+
+    /// Compute the average of the last N prices
+    /// Uses an RwLock
+    fn calculate_moving_avg_n(&self, calc_id: &CalculationId, prod_id:ProductId) -> Result<TickerCalc, EventLogError> {
+        // tracing::debug!("[calculate_moving_avg_n]");
+        let slice_max = calc_id.value();
+
+        // use len if len is less than max slice
+        let log_count = self.len();
+        let slice_max = if log_count < slice_max {
+            log_count
+        } else {
+            slice_max
+        };
+
+
+        // How many copies is this doing?
+        let slice_n:&[Ticker] = &self.log.as_slice()[0..slice_max];
+        let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == prod_id).map(|x| x.clone()).collect();
+
+
+
+        //
+        // .iter().filter(|f| { f.product_id == prod_id });
+        // myi
+
+
+        // let slice_n:Vec<Ticker> = .filter(|f| {f.product_id == prod_id}).collect();
+
+
+
+        // let slice_n: &[Ticker] = &self.log.iter().filter(|f| {f.product_id == prod_id}).collect();
+        // let slice_n = &slice_n[0..slice_max];
+
+        // .as_slice()[0..slice_max];
+        // assert_eq!(slice_max, slice_n.len());
+
+        let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
+
+        let dtg_of_this_calc:DateTime<Utc> = if slice_n.len() > 0{
+            slice_n[0].dtg
+        } else {
+            Utc::now()
+        };
+
+        Ok(TickerCalc{
+            dtg: dtg_of_this_calc,
+            prod_id,
+            calc_id: calc_id.clone(),
+            val: avg_n,
+        })
+
+
+    }
 
 
 
@@ -184,28 +303,28 @@ impl EventLog {
         }
     }
 
-    /// select * from table...but in raw Rust
-    ///
-    /// TODO: hard-coded BTC
-    pub async fn chart_data_as_json_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
-        let slice = self.log.as_slice();
-        let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
-        let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
-        tracing::info!("dates: {:?}", &dates);
-        tracing::info!("prices: {:?}", &prices);
-        let json = serde_json::json!({
-            "columns": dates,
-            "chart_data":[
-                {
-                    "key":"BTC",
-                    "val": prices
-                }
-            ]
-        });
-        // json: Object {"chart_data": Array [Object {"key": String("BTC"), "prices": Array [Number(44203.49), Number(44202.91), Number(44203.35), Number(44203.35), Number(44203.63), Number(44203.63)]}], "columns": Array [String("2023-12-09T00:42:13.031827Z"), String("2023-12-09T00:42:12.268100Z"), String("2023-12-09T00:42:11.456841Z"), String("2023-12-09T00:42:11.453783Z"), String("2023-12-09T00:42:10.996591Z"), String("2023-12-09T00:42:10.996591Z")]}
-        tracing::info!("json: {:?}", &json);
-        Ok(json)
-    }
+    // /// select * from table...but in raw Rust
+    // ///
+    // /// TODO: hard-coded BTC
+    // pub async fn chart_data_as_json_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
+    //     let slice = self.log.as_slice();
+    //     let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
+    //     let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
+    //     tracing::info!("dates: {:?}", &dates);
+    //     tracing::info!("prices: {:?}", &prices);
+    //     let json = serde_json::json!({
+    //         "columns": dates,
+    //         "chart_data":[
+    //             {
+    //                 "key":"BTC",
+    //                 "val": prices
+    //             }
+    //         ]
+    //     });
+    //     // json: Object {"chart_data": Array [Object {"key": String("BTC"), "prices": Array [Number(44203.49), Number(44202.91), Number(44203.35), Number(44203.35), Number(44203.63), Number(44203.63)]}], "columns": Array [String("2023-12-09T00:42:13.031827Z"), String("2023-12-09T00:42:12.268100Z"), String("2023-12-09T00:42:11.456841Z"), String("2023-12-09T00:42:11.453783Z"), String("2023-12-09T00:42:10.996591Z"), String("2023-12-09T00:42:10.996591Z")]}
+    //     tracing::info!("json: {:?}", &json);
+    //     Ok(json)
+    // }
 
     /// select * from table
     pub async fn query_sql_for_chart(&self) -> datafusion::error::Result<DataFrame> {
@@ -272,54 +391,6 @@ impl EventLog {
         Ok(df.clone())
     }
 
-    /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
-    pub fn calc_curve_diff_rust(&self, curve_n0: usize, curve_n1: usize) {
-        let start = Instant::now();
-        let avg_0 = self.avg_recent_n(curve_n0).unwrap();
-        let avg_1 = self.avg_recent_n(curve_n1).unwrap();
-        let diff = avg_0 - avg_1;
-        let graphic = match diff {
-            d if d >= 0.0 => "+++++",
-            d if d < 0.0 => "-----",
-            _ => "-----",
-        };
-
-        let log_count = self.len();
-        tracing::debug!(
-            "[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms",
-            curve_n0,
-            curve_n1,
-            diff,
-            curve_n0,
-            avg_0,
-            curve_n1,
-            avg_1,
-            log_count,
-            start.elapsed().as_micros() as f64 / 1000.0
-        );
-
-        
-
-    }
-
-    /// Compute the average of the last N prices
-    /// Uses an RwLock
-    fn avg_recent_n(&self, n: usize) -> Result<f64, EventLogError> {
-        let slice_max = n;
-
-        // use len if len is less than max slice
-        let log_count = self.len();
-        let slice_max = if log_count < slice_max {
-            log_count
-        } else {
-            slice_max
-        };
-
-        let slice_n: &[Ticker] = &self.log.as_slice()[0..slice_max];
-        assert_eq!(slice_max, slice_n.len());
-        let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
-        Ok(avg_n)
-    }
 
     /// FYI: DataFusion doesn't by default print chrono DateTimes with the time
     pub fn _print_record_batch(&self) {
@@ -377,15 +448,65 @@ pub enum EventLogError {
 mod tests {
     use crate::event_log::EventLog;
     use chrono::{DateTime, Utc};
-    use common_lib::cb_ticker::{ProductId, Ticker};
+    use common_lib::cb_ticker::{Ticker};
     use datafusion::arrow::util::pretty::pretty_format_batches;
+    use common_lib::{CalculationId, ProductId};
+
+    #[test]
+    fn test_calculate_moving_avg_n(){
+        let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
+        let mut e_log = EventLog::new();
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::BtcUsd).unwrap();
+        println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
+        assert_eq!(ticker_calc.val, 10.0);
+
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
+
+        // last 4 average should be 30; last 10 average should be 20
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::BtcUsd).unwrap();
+        println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
+        assert_eq!(ticker_calc.val, 30.0);
+
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, ProductId::BtcUsd).unwrap();
+        println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
+        assert_eq!(ticker_calc.val, 20.0);
+
+    }
+
+    ///  what if we mix in some entries of a different type? Is it reading only the average of the one we asked for?
+    #[test]
+    fn test_calculate_avg_2(){
+        let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
+
+        let mut e_log = EventLog::new();
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
+        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::BtcUsd).unwrap();
+        println!("[test_calculate_moving_avg_n] test 2 mixed prod_id {:?}", ticker_calc);
+        assert_eq!(ticker_calc.val, 10.0);
+
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::EthUsd).unwrap();
+        println!("[test_calculate_moving_avg_n] test 2 mixed prod_id {:?}", ticker_calc);
+        assert_eq!(ticker_calc.val, 500.0);
+
+    }
 
     /// create and print an Arrow record batch
     #[test]
     fn test_struct_array_to_batch() {
         let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
         let mut e_log = EventLog::new();
-        let _ = e_log.push(&Ticker {
+        let _ = e_log.push_log(&Ticker {
             dtg: d1.clone(),
             product_id: ProductId::BtcUsd,
             price: 88.87,
@@ -403,7 +524,7 @@ mod tests {
         let expected_result = "+---------------------+------------+-------+
 | dtg                 | product_id | price |
 +---------------------+------------+-------+
-| 1996-12-20T00:39:57 | BtcUsd     | 88.87 |
+| 1996-12-20T00:39:57 | btc_usd    | 88.87 |
 +---------------------+------------+-------+";
         assert_eq!(test_case, expected_result);
     }
@@ -413,7 +534,7 @@ mod tests {
     async fn test_query_memory() -> datafusion::error::Result<()> {
         let mut e_log = EventLog::new();
         let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
-        let _ = e_log.push(&Ticker {
+        let _ = e_log.push_log(&Ticker {
             dtg: d1.clone(),
             product_id: ProductId::BtcUsd,
             price: 88.87,
@@ -432,7 +553,7 @@ mod tests {
         let expected_result = "+---------------------+------------+-------+
 | dtg                 | product_id | price |
 +---------------------+------------+-------+
-| 1996-12-20T00:39:57 | BtcUsd     | 88.87 |
+| 1996-12-20T00:39:57 | btc_usd    | 88.87 |
 +---------------------+------------+-------+";
         assert_eq!(test_case, expected_result);
         e_log.write_csv().await;

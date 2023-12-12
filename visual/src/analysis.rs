@@ -27,8 +27,10 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
     tracing::debug!("[present_chart]");
     let tx_db = tx_db.into_inner().as_ref().clone();
 
-    match request_chart_2(tx_db).await {
+    match request_chart_multi_data(tx_db).await {
         Ok(vec_chart2)=> {
+
+            tracing::debug!("[present_chart_multi_line] data: {:?}", &vec_chart2);
 
             match serde_json::to_string(&vec_chart2) {
                 Ok(data_vec_json) =>{
@@ -90,9 +92,9 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
 
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch
-async fn request_chart_2(tx_db:Sender<Msg>) -> Result<Vec<Chart2>, Box<dyn Error>> {
+async fn request_chart_multi_data(tx_db:Sender<Msg>) -> Result<Vec<Chart2>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
-    match tx_db.send(Msg::RequestChart2{sender}) {
+    match tx_db.send(Msg::RqstChartMulti {sender}) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)

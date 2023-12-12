@@ -10,7 +10,7 @@ use datafusion::dataframe::DataFrame;
 pub async fn request_raw_data(tx: web::Data<Sender<Msg>>) -> impl Responder{
     let (tx_web, rx_web) = tokio::sync::oneshot::channel::<DataFrame>();
 
-    match tx.send(Msg::GetRaw { sender: tx_web}) {
+    match tx.send(Msg::RqstRaw { sender: tx_web}) {
         Ok(_) => match rx_web.await {
             Ok(df) => {
                 pretty_format_batches(&df.collect().await.unwrap())

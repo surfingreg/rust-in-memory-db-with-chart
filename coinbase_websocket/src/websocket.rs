@@ -8,12 +8,10 @@ use std::fmt::Debug;
 use std::net::TcpStream;
 use std::thread::JoinHandle;
 use strum::IntoEnumIterator;
-
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 use url::Url;
-use common_lib::cb_ticker::ProductId;
-use common_lib::Msg;
+use common_lib::{Msg, ProductId};
 
 /// Start a new thread listening to the coinbase websocket
 pub fn run(tx_operator: Sender<Msg>) -> JoinHandle<()> {

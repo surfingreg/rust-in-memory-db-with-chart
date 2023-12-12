@@ -4,17 +4,16 @@
 //! data structures.
 //!
 
-use common_lib::cb_ticker::{ProductId, Ticker};
+use common_lib::cb_ticker::{Ticker};
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
 use logger::event_log::{EventLog};
 use std::sync::Arc;
-use serde_json::Value;
 use tokio::runtime::Handle;
-use common_lib::{ChartAsJson, ChartType, KitchenSinkError, Msg};
+use common_lib::{CalculationId, ChartAsJson, KitchenSinkError, Msg, ProductId};
 use logger::event_book::EventBook;
 
-const EVT_LOG_TABLE:&str="coinbase";
+const BOOK_NAME_COINBASE:&str="coinbase";
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
@@ -55,8 +54,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
         Msg::Save(ticker) => {
             save_ticker(&ticker, evt_book);
-            // run_calculations(&ticker.product_id.to_string(), evt_book);
-            run_calculations(EVT_LOG_TABLE, evt_book);
+            run_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
             Ok(())
         },
 
@@ -85,12 +83,12 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         //     }
         // },
 
-        Msg::RequestChart2{sender} => {
+        Msg::RqstChartMulti {sender} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
-            let chart = match evt_book_read_lock.get(EVT_LOG_TABLE){
+            let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
                     tr.block_on(async{
-                        evt_log.chart_data_rust_without_sql2().await
+                        evt_log.chart_multi_from_rust().await
                     })
                 },
                 None=> Err(KitchenSinkError::DbError),
@@ -106,30 +104,30 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                 _ => Ok(()),
             }
         },
-
-        Msg::RequestChartJson{chart_type, sender} => {
-            match chart_type{
-                ChartType::BasicAsJson => {
-                    let evt_book_read_lock = evt_book.book.read().unwrap();
-
-                    // TODO: hard-coded hashmap lookup key
-                    let json:Value = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
-                        Some(evt_log)=>{
-                            tr.block_on(async{
-                                evt_log.chart_data_as_json_without_sql().await
-                            })
-                        },
-                        None=> Err(KitchenSinkError::DbError),
-                    }?;
-
-                    match sender.send(json) {
-                        Err(_e)=> Err(KitchenSinkError::SendError),
-                        _ => Ok(()),
-                    }
-                },
-                _ => Err(KitchenSinkError::NoMessageMatch),
-            }
-        },
+        //
+        // Msg::RequestChartJson{chart_type, sender} => {
+        //     match chart_type{
+        //         ChartType::BasicAsJson => {
+        //             let evt_book_read_lock = evt_book.book.read().unwrap();
+        //
+        //             // TODO: hard-coded hashmap lookup key
+        //             let json:Value = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
+        //                 Some(evt_log)=>{
+        //                     tr.block_on(async{
+        //                         evt_log.chart_data_as_json_without_sql().await
+        //                     })
+        //                 },
+        //                 None=> Err(KitchenSinkError::DbError),
+        //             }?;
+        //
+        //             match sender.send(json) {
+        //                 Err(_e)=> Err(KitchenSinkError::SendError),
+        //                 _ => Ok(()),
+        //             }
+        //         },
+        //         _ => Err(KitchenSinkError::NoMessageMatch),
+        //     }
+        // },
 
 
 
@@ -137,11 +135,11 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
 
         // send a DataFrame back with 'select * from ..."
-        Msg::GetRaw {sender}=>{
+        Msg::RqstRaw {sender}=>{
 
             let evt_book_read_lock = evt_book.book.read().unwrap();
 
-            let df = match evt_book_read_lock.get(EVT_LOG_TABLE){
+            let df = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
 
                     let df_result = tr.block_on(async{
@@ -207,20 +205,27 @@ fn _chart_data_test() ->Result<ChartAsJson, KitchenSinkError> {
 /// locks the event book to get the event log for the new ticker
 fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
     // tracing::debug!("[save_ticker] POST {:?}", ticker);
-
-    // TODO: instead of using a separate "table" for every product ID I'm just going to use one...for now
-
-    // let _ = evt_book.push(&ticker.product_id.to_string(), ticker);
-    let _ = evt_book.push(EVT_LOG_TABLE, ticker);
+    let _ = evt_book.push_log(BOOK_NAME_COINBASE, ticker);
 
 }
 
 /// read lock
-fn run_calculations(key: &str, evt_book: &EventBook) {
-    let evt_book_read_lock = evt_book.book.read().unwrap();
-    let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
-    evt_log.calc_curve_diff_rust(4, 100);
-    evt_log.calc_curve_diff_rust(4, 300);
+fn run_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId) {
+    // tracing::debug!("[run_calculations]");
+    let (calc0, calc1) = {
+        let evt_book_read_lock = evt_book.book.read().unwrap();
+        let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
+        evt_log.calc_curve_diff_rust(CalculationId::MovingAvg0004, CalculationId::MovingAvg0010, prod_id)
+
+        // release read lock (holding read blocks write lock)
+    };
+
+    // save the two calculations just completed
+    // commence write lock...
+    let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &calc0);
+    let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &calc1);
+
+    // evt_log.calc_curve_diff_rust(4, 300);
     // evt_log.calc_curve_diff(4, 500);
     // evt_log.calc_curve_diff(20, 100);
     // evt_log.calc_curve_diff(20, 300);
