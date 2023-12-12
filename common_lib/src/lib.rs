@@ -3,7 +3,6 @@
 use chrono::{DateTime, Utc};
 use datafusion::dataframe::DataFrame;
 use serde::{Deserialize, Serialize};
-use strum_macros::Display;
 use crate::cb_ticker::{Ticker};
 use tokio::sync::oneshot;
 
@@ -33,14 +32,40 @@ pub struct Chart {
     pub chart_data: Vec<ChartData>  // aka profit_total (daily)
 }
 
+
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Chart2 {
+    pub label: String,
+    pub data: Vec<ChartData2>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChartData2 {
+    pub x: DateTime<Utc>,
+    pub y: f64
+}
+
+
+
+
+
+
+
 #[derive(thiserror::Error)]
-#[derive(Debug, PartialEq, Display)]
+#[derive(Debug, PartialEq)]
 pub enum KitchenSinkError {
+    #[error("KitchenSinkError")]
     DbError,
+    #[error("KitchenSinkError")]
     JsonError,
+    #[error("KitchenSinkError")]
     Serde,
+    #[error("KitchenSinkError")]
     RecvError,
+    #[error("KitchenSinkError")]
     SendError,
+    #[error("KitchenSinkError")]
     NoMessageMatch,
 }
 
@@ -57,6 +82,7 @@ pub enum Msg {
     Stop,
     RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
     RequestChartRust{sender: oneshot::Sender<Chart> },
+    RequestChart2{sender: oneshot::Sender<Vec<Chart2>> },
 
     GetRaw{sender: oneshot::Sender<DataFrame> },
 

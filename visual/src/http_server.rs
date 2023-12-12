@@ -11,7 +11,7 @@ use handlebars::Handlebars;
 use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
-use crate::analysis::present_chart_rust;
+use crate::analysis::{present_chart_2, present_chart_rust};
 use crate::api_internals::request_raw_data;
 
 
@@ -85,11 +85,11 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
                     .route("/", web::get().to(present_chart_rust))
-                    .route("/raw", web::get().to(get_raw))
-                    // .route("/analysis", web::get().to(analysis::get_analysis))
-                    // .route("/test", web::get().to(analysis::present_chart_test))
                     .route("/js/chart.js", web::get().to(get_chart_js))
-
+                    .route("/js/chartjs-adapter-date-fns.js", web::get().to(get_chart_js_date))
+                    .route("/stocks.csv", web::get().to(get_stocks_csv))
+                    .route("/raw", web::get().to(get_raw))
+                    .route("/c2", web::get().to(present_chart_2))
             })
             // .bind_rustls(("127.0.0.1", 8443), config)?
             .bind(("127.0.0.1", 8080))?
@@ -112,6 +112,35 @@ async fn get_chart_js()-> impl Responder{
     }
 
 }
+
+/// GET http://127.0.0.1:8080/js/chart.js
+/// https://www.chartjs.org/docs/latest/getting-started/installation.html
+async fn get_chart_js_date()-> impl Responder{
+    tracing::debug!("[get_chart_js]");
+    let config_location:ConfigLocation = ConfigLocation::from_str(&std::env::var("CONFIG_LOCATION").unwrap_or_else(|_| "not_docker".to_owned())).expect("CONFIG_LOCATION");
+
+    match config_location{
+        ConfigLocation::Docker => NamedFile::open_async("./static/js/chartjs-adapter-date-fns.js").await,
+        // TODO: un-hard-code paths
+        ConfigLocation::NotDocker => NamedFile::open_async("visual/static/js/chartjs-adapter-date-fns.js").await
+    }
+
+}
+
+/// GET http://127.0.0.1:8080/js/chart.js
+/// https://www.chartjs.org/docs/latest/getting-started/installation.html
+async fn get_stocks_csv()-> impl Responder{
+    tracing::debug!("[get_chart_js]");
+    let config_location:ConfigLocation = ConfigLocation::from_str(&std::env::var("CONFIG_LOCATION").unwrap_or_else(|_| "not_docker".to_owned())).expect("CONFIG_LOCATION");
+
+    match config_location{
+        ConfigLocation::Docker => NamedFile::open_async("./static/js/chart.js").await,
+        // TODO: un-hard-code paths
+        ConfigLocation::NotDocker => NamedFile::open_async("visual/static/stocks.csv").await
+    }
+
+}
+
 
 fn _load_private_key(filename: &str) -> rustls::PrivateKey {
     let keyfile = fs::File::open(filename).expect("cannot open private key file");

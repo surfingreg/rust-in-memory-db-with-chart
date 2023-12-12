@@ -18,7 +18,8 @@ pub struct Ticker {
     pub price: f64,
 }
 
-#[derive(Debug, Deserialize, Display, Clone, EnumIter)]
+#[derive(Debug, Deserialize, Display, Clone, EnumIter, PartialEq)]
+#[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum ProductId {
     #[serde(rename = "BTC-USD")]

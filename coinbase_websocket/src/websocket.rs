@@ -46,6 +46,9 @@ fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx: Sender<Msg>) {
         // Ok(Text("{\"type\":\"ticker\",\"sequence\":68161040101,\"product_id\":\"BTC-USD\",\"price\":\"36557.84\",\"open_24h\":\"35593.39\",\"volume_24h\":\"29347.72624298\",\"low_24h\":\"35555.16\",\"high_24h\":\"37999\",\"volume_30d\":\"413614.02343353\",\"best_bid\":\"36554.94\",\"best_bid_size\":\"0.02024396\",\"best_ask\":\"36557.84\",\"best_ask_size\":\"0.00875776\",\"side\":\"buy\",\"time\":\"2023-11-09T21:17:51.262478Z\",\"trade_id\":576007711,\"last_size\":\"0.00173305\"}"))
         match msg_result {
             Ok(Message::Text(t)) => {
+
+                // TODO: coinbase can send something weird and crash the whole websocket with this unwrap
+
                 let json: Coinbase = serde_json::from_str(&t).unwrap();
                 match json {
                     Coinbase::Subscriptions(s) => {

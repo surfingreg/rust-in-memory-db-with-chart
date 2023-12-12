@@ -1,12 +1,13 @@
 //! analysis
 //!
 
+use std::error::Error;
 use actix_web::{web, HttpResponse};
 use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{Chart, KitchenSinkError, Msg};
+use common_lib::{Chart, Chart2, KitchenSinkError, Msg};
 
 
 pub async fn redirect_home() -> HttpResponse {
@@ -19,6 +20,38 @@ pub async fn redirect_home() -> HttpResponse {
         .append_header(("Cache-Control", "no-store"))
         .finish()
 }
+
+pub async fn present_chart_2(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+
+    tracing::debug!("[present_chart]");
+
+    let tx_db = tx_db.into_inner().as_ref().clone();
+
+    match request_chart_2(tx_db).await {
+
+
+
+        Ok(vec_chart2)=> {
+
+            let vec_chart2_json = serde_json::to_string(&vec_chart2).unwrap();
+
+            let data = json!({
+                "title": "Analysis",
+                "parent": "base0",
+                "is_logged_in": true,
+                "vec_chart2_data": vec_chart2_json,
+            });
+            let body = hb.render("chart2", &data).unwrap();
+            HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+        }
+        Err(e)=>{
+            // TODO: figure out how to do a match with two results
+            tracing::error!("[present_chart_rust] database error getting chart data: {:?}", e);
+            redirect_home().await
+        }
+    }
+}
+
 
 
 /// TODO: use flatbuffers or something instead of json
@@ -49,6 +82,19 @@ pub async fn present_chart_rust(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Han
             tracing::error!("[present_chart_rust] database error getting chart data: {:?}", e);
             redirect_home().await
         }
+    }
+}
+
+/// Ask the database for data for the chart
+/// TODO: add an enum for the kind of chart to fetch
+async fn request_chart_2(tx_db:Sender<Msg>) -> Result<Vec<Chart2>, Box<dyn Error>> {
+    let (sender, rx) = oneshot::channel();
+    match tx_db.send(Msg::RequestChart2{sender}) {
+        Ok(_)=> {
+            let chart = rx.await?;
+            Ok(chart)
+        },
+        Err(_)=> Err(Box::new(KitchenSinkError::SendError))
     }
 }
 

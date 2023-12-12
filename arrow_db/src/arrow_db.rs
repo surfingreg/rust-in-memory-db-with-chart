@@ -26,10 +26,10 @@ pub fn run(tr: Handle) -> Sender<Msg> {
         tracing::debug!("[run] inside thread::spawn 0");
         let _ = start_heartbeat(tx2);
         loop {
-            tracing::debug!("[run] inside loop");
+            // tracing::debug!("[run] inside loop");
             match rx.recv() {
                 Ok(message) => {
-                    tracing::debug!("[run] message: {:?}", &message);
+                    // tracing::debug!("[run] message: {:?}", &message);
                     let evt_book = event_book.clone();
 
                     // new thread to prevent processing blocking the websocket
@@ -45,7 +45,7 @@ pub fn run(tr: Handle) -> Sender<Msg> {
 }
 
 fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), KitchenSinkError>  {
-    tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
+    // tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
 
     match message {
         Msg::Ping => {
@@ -69,6 +69,30 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                 Some(evt_log)=>{
                     tr.block_on(async{
                         evt_log.chart_data_rust_without_sql().await
+                    })
+                },
+                None=> Err(KitchenSinkError::DbError),
+            }?;
+
+            tracing::info!("[returning chart] {:?}", &chart);
+
+            match sender.send(chart) {
+                Err(e)=> {
+                    tracing::error!("[Msg::RequestChartRust] {:?}", &e);
+                    Err(KitchenSinkError::SendError)
+                },
+                _ => Ok(()),
+            }
+        },
+
+        Msg::RequestChart2{sender} => {
+            let evt_book_read_lock = evt_book.book.read().unwrap();
+
+            // TODO: hard-coded hashmap lookup key
+            let chart = match evt_book_read_lock.get(EVT_LOG_TABLE){
+                Some(evt_log)=>{
+                    tr.block_on(async{
+                        evt_log.chart_data_rust_without_sql2().await
                     })
                 },
                 None=> Err(KitchenSinkError::DbError),
@@ -184,7 +208,7 @@ fn _chart_data_test() ->Result<ChartAsJson, KitchenSinkError> {
 
 /// locks the event book to get the event log for the new ticker
 fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
-    tracing::debug!("[arrow_db] POST {:?}", ticker);
+    // tracing::debug!("[save_ticker] POST {:?}", ticker);
 
     // TODO: instead of using a separate "table" for every product ID I'm just going to use one...for now
 

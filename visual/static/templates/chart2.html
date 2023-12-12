@@ -1,0 +1,106 @@
+{{#*inline "page"}}
+<h2><p>{{title}}</p></h2>
+<!--<style>-->
+<!--    table {-->
+<!--        font-family: arial, sans-serif;-->
+<!--        border-collapse: collapse;-->
+<!--        width: 100%;-->
+<!--    }-->
+
+<!--    td, th {-->
+<!--        border: 1px solid #dddddd;analysis.html-->
+<!--        text-align: left;-->
+<!--        padding: 8px;-->
+<!--    }-->
+
+<!--    tr:nth-child(even) {-->
+<!--        background-color: #dddddd;-->
+<!--    }-->
+<!--</style>-->
+
+<div><canvas id="chart_0"></canvas><br></div>
+<script src="/js/chart.js"></script>
+<script src="/js/chartjs-adapter-date-fns.js"></script>
+
+
+<script>
+
+
+    console.log("*****[chart2.html]*****");
+
+    const c = '{{vec_chart2_data}}';
+    var json = JSON.parse(c.replace(/&quot;/g, '\"'));
+    console.log("json: " + json);
+    console.log("j[0] label: " + json[0].label);
+
+
+    const rust_datasets = [];
+
+    for (let i in json){
+        // console.log("label(" + i + "): " + json[i].label);
+        // const data_i = json[i].data;
+        // for(let j in data_i){
+        //     console.log("data: " + data_i[j].x + ": " + data_i[j].y);
+        // }
+
+        var s = {
+            label: json[i].label,
+            borderColor: 'blue',
+            data: json[i].data
+        };
+        rust_datasets.push(s);
+
+    }
+
+    // ***** dataset format test ****
+    console.log("datasets count: " + rust_datasets.length);
+    for (let i in rust_datasets){
+        console.log("dataset[" + i + "]: " + rust_datasets[i].label);
+        console.log("dataset[" + i + "]: " + rust_datasets[i].data);
+
+        const data_i = rust_datasets[i].data;
+        for(let j in data_i){
+            console.log("data: " + data_i[j].x + ": " + data_i[j].y);
+        }
+    }
+    // ***** END dataset format test ****
+
+
+    // var s1 = {
+    //     label: 's1',
+    //     borderColor: 'blue',
+    //     data: [
+    //         { x: '2017-01-06 18:39:30', y: 100 },
+    //         { x: '2017-01-07 18:39:28', y: 101 },
+    //     ]
+    // };
+    //
+    // var s2 = {
+    //     label: 's2',
+    //     borderColor: 'red',
+    //     data: [
+    //         { x: '2017-01-07 18:00:00', y: 90 },
+    //         { x: '2017-01-08 18:00:00', y: 105 },
+    //     ]
+    // };
+
+    var ctx = document.getElementById('chart_0').getContext('2d');
+    var chart = new Chart(ctx, {
+        type: 'line',
+        // data: { datasets: [s1, s2] },
+        data: { datasets: rust_datasets },
+        options: {
+            scales: {
+                x: {
+                    type: 'time'
+                }
+            }
+        }
+    });
+
+</script>
+
+<br>
+
+{{/inline}}
+{{> (lookup this "parent")}}

@@ -16,7 +16,8 @@ use slice_ring_buffer::SliceRingBuffer;
 use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
-use common_lib::{Chart, ChartData, KitchenSinkError};
+use strum::IntoEnumIterator;
+use common_lib::{Chart, Chart2, ChartData, ChartData2, KitchenSinkError};
 
 
 
@@ -67,26 +68,71 @@ impl EventLog {
     /// select * from table...but in raw Rust
     pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
         let slice = self.log.as_slice();
-        let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
-        let prices:Vec<f64> = self.log.iter().rev().map(|x| x.price).collect();
-        tracing::info!("dates: {:?}", &dates);
-        tracing::info!("prices: {:?}", &prices);
 
-        // TODO: loop here to collect multiple keys
-        let cd = ChartData{
-            key: ProductId::BtcUsd.to_string(),
-            val:prices,
-        };
+        // TODO: the columns have to be generalized over all the charts
+        let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
+
+        let mut chart_data:Vec<ChartData> = vec!();
+
+        for stock in ProductId::iter() {
+
+            // TODO: the separate "keys" have to be separated with their data from the other keys into separate arrays
+
+            // TODO filter by product_id
+            let prices: Vec<f64> = self.log.iter().rev()
+                .filter(|x| x.product_id == stock)
+                .map(|x| x.price).collect();
+
+            let cd = ChartData {
+                key: stock.to_string(),
+                val: prices,
+            };
+
+            chart_data.push(cd);
+        }
+
+        // tracing::info!("dates: {:?}", &dates);
+        // tracing::info!("prices: {:?}", &prices);
 
         // TODO: de-duplicate where there are multiple products at the exact same time
         Ok(Chart {
             columns: dates,
-            chart_data: vec!(cd),
+            chart_data,
         })
 
     }
 
+    /// select * from table...but in raw Rust
+    pub async fn chart_data_rust_without_sql2(&self) -> Result<Vec<Chart2>, KitchenSinkError>  {
 
+        let mut data:Vec<Chart2> = vec!();
+
+        for stock in ProductId::iter() {
+
+            // let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
+            //
+            // let prices: Vec<f64> = self.log.iter().rev()
+            //     .filter(|x| x.product_id == stock)
+            //     .map(|x| x.price).collect();
+
+            let z:Vec<ChartData2> = self.log.iter().rev()
+                .filter(|data_point| data_point.product_id == stock)
+                .map(|x|{
+                    ChartData2{ x: x.dtg, y: x.price }
+                }
+            ).collect();
+
+            let chart = Chart2{
+                label: stock.to_string(),
+                data: z,
+            };
+
+            data.push(chart);
+        }
+
+        Ok(data)
+
+    }
 
 
 
