@@ -14,6 +14,8 @@ use tokio::runtime::Handle;
 use common_lib::{ChartAsJson, ChartType, KitchenSinkError, Msg};
 use logger::event_book::EventBook;
 
+const EVT_LOG_TABLE:&str="coinbase";
+
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
     tracing::debug!("[run]");
@@ -54,7 +56,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         Msg::Save(ticker) => {
             save_ticker(&ticker, evt_book);
             // run_calculations(&ticker.product_id.to_string(), evt_book);
-            run_calculations("coinbase", evt_book);
+            run_calculations(EVT_LOG_TABLE, evt_book);
             Ok(())
         },
 
@@ -117,7 +119,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
             let evt_book_read_lock = evt_book.book.read().unwrap();
 
-            let df = match evt_book_read_lock.get("coinbase"){
+            let df = match evt_book_read_lock.get(EVT_LOG_TABLE){
                 Some(evt_log)=>{
 
                     let df_result = tr.block_on(async{
@@ -187,7 +189,7 @@ fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
     // TODO: instead of using a separate "table" for every product ID I'm just going to use one...for now
 
     // let _ = evt_book.push(&ticker.product_id.to_string(), ticker);
-    let _ = evt_book.push("coinbase", ticker);
+    let _ = evt_book.push(EVT_LOG_TABLE, ticker);
 
 }
 
