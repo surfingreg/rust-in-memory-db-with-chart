@@ -7,7 +7,7 @@
 use common_lib::cb_ticker::{Ticker};
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
-use logger::event_log::{EventLog};
+use logger::event_log::{EventLog, EventLogError};
 use std::sync::Arc;
 use tokio::runtime::Handle;
 use common_lib::{CalculationId, ChartAsJson, KitchenSinkError, Msg, ProductId};
@@ -54,7 +54,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
         Msg::Save(ticker) => {
             save_ticker(&ticker, evt_book);
-            run_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
+            let _ = run_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
             Ok(())
         },
 
@@ -210,20 +210,35 @@ fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
 }
 
 /// read lock
-fn run_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId) {
+fn run_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)->Result<(), EventLogError> {
     // tracing::debug!("[run_calculations]");
-    let (calc0, calc1) = {
+
+    let mut calc = vec![];
+
+     {
         let evt_book_read_lock = evt_book.book.read().unwrap();
         let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
-        evt_log.calc_curve_diff_rust(CalculationId::MovingAvg0004, CalculationId::MovingAvg0010, prod_id)
+
+        // evt_log.calc_curve_diff_rust(CalculationId::MovingAvg0004, CalculationId::MovingAvg0010, prod_id)
+
+        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &prod_id)?);
+        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?);
+        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0100, &prod_id)?);
+        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg1000, &prod_id)?);
 
         // release read lock (holding read blocks write lock)
     };
 
     // save the two calculations just completed
     // commence write lock...
-    let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &calc0);
-    let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &calc1);
+    // let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &calc0);
+    // let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &calc1);
+
+    for c in calc{
+        let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &c);
+
+    }
+    Ok(())
 
     // evt_log.calc_curve_diff_rust(4, 300);
     // evt_log.calc_curve_diff(4, 500);

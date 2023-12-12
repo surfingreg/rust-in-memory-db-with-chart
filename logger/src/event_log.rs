@@ -126,8 +126,8 @@ impl EventLog {
     pub fn calc_curve_diff_rust(&self, curve_n0: CalculationId, curve_n1: CalculationId, prod_id:ProductId)->(TickerCalc, TickerCalc)  {
         // tracing::debug!("[calc_curve_diff_rust]");
         let start = Instant::now();
-        let calc0 = self.calculate_moving_avg_n(&curve_n0, prod_id.clone()).unwrap();
-        let calc1 = self.calculate_moving_avg_n(&curve_n1, prod_id).unwrap();
+        let calc0 = self.calculate_moving_avg_n(&curve_n0, &prod_id).unwrap();
+        let calc1 = self.calculate_moving_avg_n(&curve_n1, &prod_id).unwrap();
         let avg_0 = calc0.val;
         let avg_1 = calc1.val;
         let diff = avg_0 - avg_1;
@@ -157,7 +157,7 @@ impl EventLog {
 
     /// Compute the average of the last N prices
     /// Uses an RwLock
-    fn calculate_moving_avg_n(&self, calc_id: &CalculationId, prod_id:ProductId) -> Result<TickerCalc, EventLogError> {
+    pub fn calculate_moving_avg_n(&self, calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
         // tracing::debug!("[calculate_moving_avg_n]");
         let slice_max = calc_id.value();
 
@@ -172,7 +172,7 @@ impl EventLog {
 
         // How many copies is this doing?
         let slice_n:&[Ticker] = &self.log.as_slice()[0..slice_max];
-        let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == prod_id).map(|x| x.clone()).collect();
+        let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == *prod_id).map(|x| x.clone()).collect();
 
 
 
@@ -201,7 +201,7 @@ impl EventLog {
 
         Ok(TickerCalc{
             dtg: dtg_of_this_calc,
-            prod_id,
+            prod_id: prod_id.clone(),
             calc_id: calc_id.clone(),
             val: avg_n,
         })
