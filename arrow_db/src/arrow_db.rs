@@ -65,7 +65,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             let evt_book_read_lock = evt_book.book.read().unwrap();
 
             // TODO: hard-coded hashmap lookup key
-            let chart = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
+            let chart = match evt_book_read_lock.get(EVT_LOG_TABLE){
                 Some(evt_log)=>{
                     tr.block_on(async{
                         evt_log.chart_data_rust_without_sql().await
