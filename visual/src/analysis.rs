@@ -9,6 +9,7 @@ use serde_json::json;
 use tokio::sync::oneshot;
 use common_lib::{Chart, Chart2, KitchenSinkError, Msg};
 
+const CHART_MULTI_NAME:&str = "chart_multi";
 
 pub async fn redirect_home() -> HttpResponse {
     tracing::debug!("[redirect_home]");
@@ -21,32 +22,32 @@ pub async fn redirect_home() -> HttpResponse {
         .finish()
 }
 
-pub async fn present_chart_2(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
-
+/// show multiple datasets on the same chart, regardless of x-axis count
+pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     tracing::debug!("[present_chart]");
-
     let tx_db = tx_db.into_inner().as_ref().clone();
-
     match request_chart_2(tx_db).await {
-
-
-
         Ok(vec_chart2)=> {
 
-            let vec_chart2_json = serde_json::to_string(&vec_chart2).unwrap();
-
-            let data = json!({
-                "title": "Analysis",
-                "parent": "base0",
-                "is_logged_in": true,
-                "vec_chart2_data": vec_chart2_json,
-            });
-            let body = hb.render("chart2", &data).unwrap();
-            HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+            match serde_json::to_string(&vec_chart2) {
+                Ok(data_vec_json) =>{
+                    let data = json!({
+                        "title": "Analysis",
+                        "parent": "base0",
+                        "is_logged_in": true,
+                        "data_vec": data_vec_json,
+                    });
+                    let body = hb.render(CHART_MULTI_NAME, &data).unwrap();
+                    HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+                },
+                Err(e)=>{
+                    tracing::error!("[present_chart_multi_line] json serialization error: {:?}", e);
+                    redirect_home().await
+                }
+            }
         }
         Err(e)=>{
-            // TODO: figure out how to do a match with two results
-            tracing::error!("[present_chart_rust] database error getting chart data: {:?}", e);
+            tracing::error!("[present_chart_multi_line] database error getting chart data: {:?}", e);
             redirect_home().await
         }
     }

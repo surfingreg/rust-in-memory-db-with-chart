@@ -11,7 +11,7 @@ use handlebars::Handlebars;
 use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
-use crate::analysis::{present_chart_2, present_chart_rust};
+use crate::analysis::{present_chart_multi_line, present_chart_rust};
 use crate::api_internals::request_raw_data;
 
 
@@ -84,12 +84,12 @@ pub fn run(tx_operator2: Sender<Msg>, tokio_runtime: Handle) {
                 App::new()
                     .app_data(tx_operator.clone())
                     .app_data(handlebars_ref.clone())
-                    .route("/", web::get().to(present_chart_rust))
+                    .route("/", web::get().to(present_chart_multi_line))
                     .route("/js/chart.js", web::get().to(get_chart_js))
                     .route("/js/chartjs-adapter-date-fns.js", web::get().to(get_chart_js_date))
                     .route("/stocks.csv", web::get().to(get_stocks_csv))
                     .route("/raw", web::get().to(get_raw))
-                    .route("/c2", web::get().to(present_chart_2))
+                    .route("/c2", web::get().to(present_chart_rust))
             })
             // .bind_rustls(("127.0.0.1", 8443), config)?
             .bind(("127.0.0.1", 8080))?
