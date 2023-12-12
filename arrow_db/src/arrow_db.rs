@@ -7,11 +7,12 @@
 use common_lib::cb_ticker::{ProductId, Ticker};
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
-use logger::event_log::{EventBook, EventLog};
+use logger::event_log::{EventLog};
 use std::sync::Arc;
 use serde_json::Value;
 use tokio::runtime::Handle;
 use common_lib::{ChartAsJson, ChartType, KitchenSinkError, Msg};
+use logger::event_book::EventBook;
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
@@ -31,10 +32,10 @@ pub fn run(tr: Handle) -> Sender<Msg> {
 
                     // new thread to prevent processing blocking the websocket
                     if let Err(e) = process_message(message, &evt_book, tr.clone()){
-                        tracing::debug!("[run] message error: {:?}", e);
+                        tracing::error!("[run] message error: {:?}", e);
                     }
                 }
-                Err(e) => tracing::debug!("[arrow_db] error {:?}", &e),
+                Err(e) => tracing::error!("[arrow_db] error {:?}", &e),
             }
         }
     });
@@ -52,7 +53,8 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
         Msg::Save(ticker) => {
             save_ticker(&ticker, evt_book);
-            run_calculations(&ticker.product_id.to_string(), evt_book);
+            // run_calculations(&ticker.product_id.to_string(), evt_book);
+            run_calculations("coinbase", evt_book);
             Ok(())
         },
 
@@ -115,7 +117,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
             let evt_book_read_lock = evt_book.book.read().unwrap();
 
-            let df = match evt_book_read_lock.get(&ProductId::BtcUsd.to_string()){
+            let df = match evt_book_read_lock.get("coinbase"){
                 Some(evt_log)=>{
 
                     let df_result = tr.block_on(async{
@@ -181,7 +183,12 @@ fn _chart_data_test() ->Result<ChartAsJson, KitchenSinkError> {
 /// locks the event book to get the event log for the new ticker
 fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
     tracing::debug!("[arrow_db] POST {:?}", ticker);
-    let _ = evt_book.push(&ticker.product_id.to_string(), ticker);
+
+    // TODO: instead of using a separate "table" for every product ID I'm just going to use one...for now
+
+    // let _ = evt_book.push(&ticker.product_id.to_string(), ticker);
+    let _ = evt_book.push("coinbase", ticker);
+
 }
 
 /// read lock

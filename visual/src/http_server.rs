@@ -12,12 +12,12 @@ use tokio::runtime::Handle;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
 use crate::analysis::present_chart_rust;
-use crate::api_internals::request_index_data;
+use crate::api_internals::request_raw_data;
 
 
 /// GET '/raw'
 async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
-    request_index_data(tx).await
+    request_raw_data(tx).await
 }
 
 
