@@ -11,47 +11,29 @@ use strum_macros::{Display, EnumIter};
 use tokio::sync::oneshot;
 use crate::cb_ticker::Ticker;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChartAsJson {
-    // chart_data: serde_json::Value
-    pub columns: serde_json::Value,
-    pub chart_data: serde_json::Value  // aka profit_total (daily)
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// pub struct ChartAsJson {
+//     // chart_data: serde_json::Value
+//     pub columns: serde_json::Value,
+//     pub chart_data: serde_json::Value  // aka profit_total (daily)
+// }
 
-// TODO: generalize
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChartData {
-    pub key:String,
-    pub val:Vec<f64>
 
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Chart {
-    pub columns: Vec<DateTime<Utc>>,
-    pub chart_data: Vec<ChartData>  // aka profit_total (daily)
-}
 
 
 
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Chart2 {
+pub struct ChartDataset {
     pub label: String,
-    pub data: Vec<ChartData2>,
+    pub data: Vec<ChartTimeSeries>,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ChartData2 {
+pub struct ChartTimeSeries {
     pub x: DateTime<Utc>,
     pub y: f64
 }
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct CalcData {
-//     pub calc_type: CalculationId,
-//     pub x: DateTime<Utc>,
-//     pub y: f64
-// }
 
 
 
@@ -87,7 +69,7 @@ pub enum Msg {
     Pong,
     Start,
     Stop,
-    RqstChartMulti {sender: oneshot::Sender<Vec<Chart2>> },
+    RqstChartMulti {sender: oneshot::Sender<Vec<ChartDataset>> },
     RqstRaw {sender: oneshot::Sender<DataFrame> },
 
     // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },

@@ -41,6 +41,7 @@ pub fn init(package_name: &str) {
         .with(fmt::layer())
         .with(EnvFilter::from_default_env())
         .init();
+
     tracing::info!("[init] .env file: {}", &dot_env_path);
 
     println!("[init] done");

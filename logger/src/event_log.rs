@@ -1,4 +1,4 @@
-//! main.rs
+//! chat_main
 //!
 //! Goal: use SQL to query an in-memory dataset (via Apache DataFusion and Apache Arrow)
 //!
@@ -17,9 +17,9 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
-use common_lib::{CalculationId, Chart2, ChartData2, KitchenSinkError, ProductId};
+use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, KitchenSinkError, ProductId};
 
-
+const LIMIT_RETURN_SIZE:usize = 1000;
 
 #[allow(dead_code)]
 const RING_BUF_SIZE: usize = 100;
@@ -77,24 +77,38 @@ impl EventLog {
 
     }
 
-
-    /// select * from table...but in raw Rust
-    /// Prep for structure chartjs expects
-    pub async fn chart_multi_from_rust(&self) -> Result<Vec<Chart2>, KitchenSinkError>  {
-        let mut data:Vec<Chart2> = vec!();
+    /// Prep all the in-memory products and calculations
+    /// on them as time series that chartjs can display
+    pub async fn chart_multi_from_rust(&self) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
+        let mut data: Vec<ChartDataset> = vec!();
 
         // "...group by product_id..."
         for prod_id in ProductId::iter() {
 
-            // separate products from the event log into datasets for the chart
-            // (basically 'group by product_id')
-            let time_series_data: Vec<ChartData2> = self.log.iter().rev()
+            // TODO: is this making numerous in-memory copies with all the collects?
+
+            // // 'group by product_id', limit query target to 1000 before filtering(?)
+            // let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
+            //     .rev().collect::<Vec<&Ticker>>()[0..LIMIT_RETURN_SIZE].iter()
+            //     .filter(|f| f.product_id == prod_id)
+            //     .map(|x| { ChartTimeSeries { x: x.dtg, y: x.price } })
+            //     .collect();
+
+            // 'group by product_id', limit query target to 1000 (or fewer) after filtering(?)
+            let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
+                // .rev()
                 .filter(|f| f.product_id == prod_id)
-                .map(|x|{
-                    ChartData2{ x: x.dtg, y: x.price }
-                })
+                .take(LIMIT_RETURN_SIZE)
+                .map(|x| { ChartTimeSeries { x: x.dtg, y: x.price } })
                 .collect();
-            let chart = Chart2{
+
+            // let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
+            //     .rev()
+            //     .filter(|f| f.product_id == prod_id)
+            //     .map(|x| { ChartTimeSeries { x: x.dtg, y: x.price } })
+            //     .collect();
+
+            let chart = ChartDataset {
                 label: prod_id.to_string(),
                 data: time_series_data,
             };
@@ -104,14 +118,17 @@ impl EventLog {
             // "...group by product_id, calculation_id..."
             for calc_id in CalculationId::iter(){
                 // grouped by product ID
-                let time_series_f64: Vec<ChartData2> = self.calc_log.iter().rev()
+                let time_series_f64: Vec<ChartTimeSeries> = self.calc_log
+                    .iter()
+                    // .rev()
                     .filter(|f| f.prod_id == prod_id && f.calc_id == calc_id)
+                    .take(LIMIT_RETURN_SIZE)
                     .map(|x|{
-                        ChartData2{ x: x.dtg, y: x.val }
+                        ChartTimeSeries { x: x.dtg, y: x.val }
                     })
                     .collect();
 
-                let chart = Chart2{
+                let chart = ChartDataset {
                     label: format!("{}_{}", prod_id.to_string(), calc_id.to_string()),
                     data: time_series_f64,
                 };
@@ -122,38 +139,36 @@ impl EventLog {
     }
 
 
-    /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
-    pub fn calc_curve_diff_rust(&self, curve_n0: CalculationId, curve_n1: CalculationId, prod_id:ProductId)->(TickerCalc, TickerCalc)  {
-        // tracing::debug!("[calc_curve_diff_rust]");
-        let start = Instant::now();
-        let calc0 = self.calculate_moving_avg_n(&curve_n0, &prod_id).unwrap();
-        let calc1 = self.calculate_moving_avg_n(&curve_n1, &prod_id).unwrap();
-        let avg_0 = calc0.val;
-        let avg_1 = calc1.val;
-        let diff = avg_0 - avg_1;
-        let graphic = match diff {
-            d if d >= 0.0 => "+++++",
-            d if d < 0.0 => "-----",
-            _ => "-----",
-        };
-
-        let log_count = self.len();
-        tracing::debug!(
-            "[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms",
-            &curve_n0.value(),
-            &curve_n1.value(),
-            diff,
-            &curve_n0.value(),
-            avg_0,
-            &curve_n1.value(),
-            avg_1,
-            log_count,
-            start.elapsed().as_micros() as f64 / 1000.0
-        );
-
-        (calc0, calc1)
-
-    }
+    // /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
+    // pub fn _calc_curve_diff_rust(&self, curve_n0: CalculationId, curve_n1: CalculationId, prod_id:ProductId) ->(TickerCalc, TickerCalc)  {
+    //     // tracing::debug!("[calc_curve_diff_rust]");
+    //     let start = Instant::now();
+    //     let calc0 = self.calculate_moving_avg_n(&curve_n0, &prod_id).unwrap();
+    //     let calc1 = self.calculate_moving_avg_n(&curve_n1, &prod_id).unwrap();
+    //     let avg_0 = calc0.val;
+    //     let avg_1 = calc1.val;
+    //     let diff = avg_0 - avg_1;
+    //     let graphic = match diff {
+    //         d if d >= 0.0 => "+++++",
+    //         d if d < 0.0 => "-----",
+    //         _ => "-----",
+    //     };
+    //
+    //     let log_count = self.len();
+    //     tracing::debug!(
+    //         "[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms",
+    //         &curve_n0.value(),
+    //         &curve_n1.value(),
+    //         diff,
+    //         &curve_n0.value(),
+    //         avg_0,
+    //         &curve_n1.value(),
+    //         avg_1,
+    //         log_count,
+    //         start.elapsed().as_micros() as f64 / 1000.0
+    //     );
+    //     (calc0, calc1)
+    // }
 
     /// Compute the average of the last N prices
     /// Uses an RwLock
@@ -169,27 +184,9 @@ impl EventLog {
             slice_max
         };
 
-
         // How many copies is this doing?
         let slice_n:&[Ticker] = &self.log.as_slice()[0..slice_max];
         let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == *prod_id).map(|x| x.clone()).collect();
-
-
-
-        //
-        // .iter().filter(|f| { f.product_id == prod_id });
-        // myi
-
-
-        // let slice_n:Vec<Ticker> = .filter(|f| {f.product_id == prod_id}).collect();
-
-
-
-        // let slice_n: &[Ticker] = &self.log.iter().filter(|f| {f.product_id == prod_id}).collect();
-        // let slice_n = &slice_n[0..slice_max];
-
-        // .as_slice()[0..slice_max];
-        // assert_eq!(slice_max, slice_n.len());
 
         let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
 

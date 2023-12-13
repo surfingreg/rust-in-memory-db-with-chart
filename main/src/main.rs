@@ -1,4 +1,4 @@
-//! main/main.rs
+//! main/chat_main
 
 /*
 
@@ -42,7 +42,12 @@ fn main() {
     let h = websocket::run(tx_db.clone());
 
     let tx_db2 = tx_db.clone();
-    http_server::run(tx_db2, tokio_runtime.handle().clone());
+    tokio_runtime.block_on(async {
+        match http_server::run(tx_db2).await{
+            Ok(_) => tracing::debug!("[main] web server started on http://127.0.0.1:8080"),
+            Err(e) => tracing::debug!("[main] web server not started: {:?}", &e),
+        }
+    });
 
     h.join().unwrap();
     // loop {};
