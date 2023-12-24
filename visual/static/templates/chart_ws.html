@@ -151,7 +151,23 @@
         }
 
         socket.onmessage = (ev) => {
-          log('Received: ' + ev.data, 'message')
+
+          let json = JSON.parse(ev.data);
+
+          log('Raw: ' + ev.data, 'message')
+
+          for (var j in json) {
+
+            log('j: ' + json[j].label, '')
+            for(var k in json[j].data) {
+              let x = json[j].data[k].x;
+              let y = json[j].data[k].y;
+              log('j: (' + x + ', ' + y + ')' , '')
+            }
+
+
+          }
+
         }
 
         socket.onclose = () => {
