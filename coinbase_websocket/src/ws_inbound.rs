@@ -106,10 +106,10 @@ pub struct Subscribe {
     pub channels: Vec<String>,
 }
 
+/// here's where we subscribe to all the possible products (BTC-USD, ETH-USC, ETH-BTC
 fn generate_websocket_subscribe_json() -> serde_json::Value {
 
     let prod_ids = ProductId::iter().map(|x|{x.to_string_coinbase()}).collect();
-
 
     let cb_sub = Subscribe {
         typ: "subscribe".to_owned(),

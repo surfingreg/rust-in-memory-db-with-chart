@@ -7,7 +7,7 @@ use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{ChartDataset, KitchenSinkError, Msg};
+use common_lib::{ChartDataset, KitchenSinkError, Msg, ProductId};
 
 const CHART_MULTI_NAME:&str = "chart_multi";
 
@@ -90,9 +90,15 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
 
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch
+///
+/// TODO: Currently selects ALL product_id
 async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
-    match tx_db.send(Msg::RqstChartMulti {sender}) {
+
+    use strum::IntoEnumIterator;
+    let prods:Vec<ProductId> = ProductId::iter().collect();
+
+    match tx_db.send(Msg::RqstChartMulti {sender, filter_prod_id: prods }) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)

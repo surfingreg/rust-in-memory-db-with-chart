@@ -20,6 +20,10 @@ pub type RoomId = String;
 pub type Msg = String;
 
 pub async fn get_chat() -> impl Responder {
+    NamedFile::open_async("visual/static/templates/chat.html").await.unwrap()
+}
+
+pub async fn get_chart_ws() -> impl Responder {
     NamedFile::open_async("visual/static/templates/chart_ws.html").await.unwrap()
 }
 

@@ -23,13 +23,13 @@ use crate::cb_ticker::Ticker;
 
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartDataset {
     pub label: String,
     pub data: Vec<ChartTimeSeries>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartTimeSeries {
     pub x: DateTime<Utc>,
     pub y: f64
@@ -69,8 +69,8 @@ pub enum Msg {
     Pong,
     Start,
     Stop,
-    RqstChartMulti {sender: oneshot::Sender<Vec<ChartDataset>> },
-    RqstChartMultiSince {sender: oneshot::Sender<Vec<ChartDataset>>, since:DateTime<Utc> },
+    RqstChartMulti {sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId> },
+    RqstChartMultiSince {sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId>, since:DateTime<Utc> },
     RqstRaw {sender: oneshot::Sender<DataFrame> },
 
     // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },

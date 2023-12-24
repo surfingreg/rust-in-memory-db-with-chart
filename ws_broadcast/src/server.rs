@@ -125,7 +125,7 @@ impl Server {
             match rx.recv() {
                 Ok(msg) => {
 
-                    tracing::debug!("[server::control_comms] {msg:?}");
+                    // tracing::debug!("[server::control_comms] {msg}");
 
                     match msg {
                         Cmd::Shutdown => {
@@ -134,13 +134,23 @@ impl Server {
                             break;
                         },
                         Cmd::Broadcast(msg_out) => {
+                            tracing::debug!("[server::control_comms] outbound broadcast: {msg_out}");
                             self2.send_broadcast(msg_out);
                         }
                         _ => {},
                     }
                 }
                 Err(e) => {
-                    tracing::error!("[client][control_comms] {e:?}");
+                    tracing::error!("[server][control_comms] {e:?}");
+
+
+                    // TODO: this occurs when a client disconnects....
+
+
+                    // panic!("[server][control_comms]");
+
+
+
                 }
             }
         }

@@ -103,22 +103,6 @@
     </section>
 
     <script>
-
-      /*
-
-
-      // TODO: parse json
-      [{"label":"btc_usd","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43632.47}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.175}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.20857142857}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43640.97965517244}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43642.78674698797}]}]
-
-
-
-
-
-
-       */
-
-
-
       const $status = document.querySelector('#status')
       const $connectButton = document.querySelector('#connect')
       const $log = document.querySelector('#log')
@@ -138,9 +122,8 @@
 
         const { location } = window
 
-        // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
-        // const wsUri = `${proto}://${location.host}/ws`
-        const wsUri = "ws://127.0.0.1:3012"
+        const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
+        const wsUri = `${proto}://${location.host}/ws`
 
         log('Connecting...')
         socket = new WebSocket(wsUri)

@@ -64,7 +64,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             Ok(())
         },
 
-        Msg::RqstChartMulti {sender} => {
+        Msg::RqstChartMulti {sender, filter_prod_id} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
             let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
@@ -73,7 +73,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         // let since = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
                         // tracing::info!("[RqstChartMulti] since: {}", since);
 
-                        evt_log.chart_multi_from_rust(LIMIT_RETURN_SIZE, None).await
+                        evt_log.chart_multi_from_rust(filter_prod_id, None, LIMIT_RETURN_SIZE).await
 
                     })
                 },
@@ -90,14 +90,12 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             }
         },
 
-        Msg::RqstChartMultiSince {sender, since} => {
+        Msg::RqstChartMultiSince {sender, filter_prod_id, since} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
             let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
                     tr.block_on(async{
-
-                        evt_log.chart_multi_from_rust(LIMIT_RETURN_SIZE, Some(since)).await
-
+                        evt_log.chart_multi_from_rust(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
                     })
                 },
                 None=> Err(KitchenSinkError::DbError),

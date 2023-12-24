@@ -62,11 +62,13 @@ impl EventLog {
     /// prep for chartjs
     /// limit: limit the number of values returned
     ///
-    pub async fn chart_multi_from_rust(&self, limit: usize, since: Option<DateTime<Utc>>) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
+    /// todo: filter by product ID
+    ///
+    pub async fn chart_multi_from_rust(&self, filter_prod_id:Vec<ProductId>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
         let mut data: Vec<ChartDataset> = vec!();
 
         // "select...group by product_id..."
-        for prod_id in ProductId::iter() {
+        for prod_id in filter_prod_id /*ProductId::iter()*/ {
 
             // 'group by product_id', limit query target to 1000 (or fewer) after filtering(?)
             let time_series_data: Vec<ChartTimeSeries> = self.log.iter()

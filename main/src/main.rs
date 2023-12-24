@@ -16,13 +16,12 @@ market_watcher:latest
 */
 
 use std::error::Error;
-use std::future::Future;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
 use arrow_lib::arrow_db;
 use coinbase_websocket::ws_inbound;
-use common_lib::{ChartDataset, KitchenSinkError, Msg};
+use common_lib::{ChartDataset, KitchenSinkError, Msg, ProductId};
 use common_lib::init::init;
 use visual::http_server;
 
@@ -48,7 +47,7 @@ fn main() {
 
     // outbound websocket
     let (server_tx, server_rx) = crossbeam_channel::unbounded::<ws_broadcast::command::Cmd>();
-    let h1 = std::thread::spawn(move || {
+    let _h1 = std::thread::spawn(move || {
 
         std::thread::spawn(|| {
             let mut server = ws_broadcast::server::Server::new();
@@ -65,15 +64,22 @@ fn main() {
         tokio::spawn(async move {
             // todo: outbound websocket test; move somewhere else
             // todo: get the date of the last chart data sent and send
-            for i in 0..100 {
-                let since = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
-                match request_chart_multi_data_since(tx_db3.clone(), since).await{
+
+
+            let mut most_recent_date: DateTime<Utc> = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
+
+            loop {
+                // let since = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
+                match request_chart_multi_data_since(tx_db3.clone(), most_recent_date).await{
                     Ok(chart_vec) => {
 
+                        most_recent_date = get_most_recent_date(chart_vec.clone());
+
+                        // tracing::debug!("[main] chart_data total: {}", &json_str);
 
                         if let Ok(json_str) = serde_json::to_string::<Vec<ChartDataset>>(&chart_vec){
 
-                            tracing::debug!("[main] chart: {}", &json_str);
+                            // tracing::debug!("[main] chart in ws_broadcast thread: {}", &json_str);
 
                             // server_tx.send(ws_broadcast::command::Cmd::Broadcast(format!("hello from test: {i}"))).unwrap();
                             server_tx.send(ws_broadcast::command::Cmd::Broadcast(json_str)).unwrap();
@@ -109,10 +115,31 @@ fn main() {
 }
 
 
+/// TODO: extremely inefficient copying just to get the most recent date
+fn get_most_recent_date(chart_data: Vec<ChartDataset>) -> DateTime<Utc> {
+
+
+    // todo: de-clone() all this
+    let test: Vec<Vec<DateTime<Utc>>> = chart_data.iter().map(|a| a.data.iter().map(|b| b.x).collect()).collect();
+    tracing::debug!("[main] chart_vec, test len: {}", &test.len());
+
+    let test2: Vec<DateTime<Utc>> = test.iter().map(|x|x.clone()).flatten().collect::<Vec<DateTime<Utc>>>();
+
+    tracing::debug!("[main] chart_vec, test2 len: {}", &test2.len());
+
+
+    let max = test2.iter().max().unwrap();
+
+    tracing::debug!("[get_most_recent_date] {}", max);
+
+    max.clone()
+
+}
+
 /// duplicated from visual
 async fn request_chart_multi_data_since(tx_db: crossbeam_channel::Sender<Msg>, since: DateTime<Utc>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
-    match tx_db.send(Msg::RqstChartMultiSince {sender, since}) {
+    match tx_db.send(Msg::RqstChartMultiSince {sender, filter_prod_id: vec![ProductId::BtcUsd], since}) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)

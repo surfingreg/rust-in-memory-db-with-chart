@@ -14,7 +14,7 @@ use common_lib::init::ConfigLocation;
 use common_lib::Msg;
 use crate::analysis::{present_chart_multi_line};
 use crate::api_internals::request_raw_data;
-use crate::chat_main::{get_chat, chat_ws};
+use crate::chat_main::{get_chat, chat_ws, get_chart_ws};
 use crate::chat_server::ChatServer;
 
 
@@ -95,8 +95,8 @@ pub async fn run(tx_operator2: Sender<Msg>) -> Result<(), std::io::Error> {
             .route("/js/chartjs-adapter-date-fns.js", web::get().to(get_chart_js_date))
             // .route("/ws", web::get().to(ws_index))
             .route("/raw", web::get().to(get_raw))
-
             .route("/chat", web::get().to(get_chat))
+            .route("/chart_ws", web::get().to(get_chart_ws))
             .route("/ws", web::get().to(chat_ws))
 
     })
