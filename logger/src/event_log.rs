@@ -17,96 +17,73 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
+// use strum::IntoEnumIterator;
 use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, KitchenSinkError, ProductId};
 
-const LIMIT_RETURN_SIZE:usize = 1000;
-
-#[allow(dead_code)]
 const RING_BUF_SIZE: usize = 100;
 const NUM_CALCS: usize = 4;
-
 
 /// Ring buffer with ability to extract the entire buffer as a slice
 /// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
 pub struct EventLog {
     log: SliceRingBuffer<Ticker>,
     calc_log: SliceRingBuffer<TickerCalc>,
-
-}
-
-impl Default for EventLog {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[allow(dead_code)]
 impl EventLog {
+
     pub fn new() -> EventLog {
         EventLog {
-            // log: Arc::new(RwLock::new(SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE))),
             log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
             calc_log: SliceRingBuffer::<TickerCalc>::with_capacity(NUM_CALCS * RING_BUF_SIZE),
         }
     }
 
-    // TODO: unwrap
     pub fn len(&self) -> usize {
-        // self.read().unwrap().len()
         self.log.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        // self.read().unwrap().len()
         self.log.is_empty()
     }
 
-
-    /// push into this custom event log; thread safe
     pub fn push_log(&mut self, ticker: &Ticker) -> Result<(), EventLogError> {
         self.log.push_front((*ticker).clone());
         Ok(())
-
     }
 
     /// push into this custom event log; thread safe
     pub fn push_calc(&mut self, ticker: &TickerCalc) -> Result<(), EventLogError> {
-        // tracing::debug!("[push_calc]");
         self.calc_log.push_front((*ticker).clone());
         Ok(())
-
     }
 
-    /// Prep all the in-memory products and calculations
-    /// on them as time series that chartjs can display
-    pub async fn chart_multi_from_rust(&self) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
+    /// prep for chartjs
+    /// limit: limit the number of values returned
+    ///
+    pub async fn chart_multi_from_rust(&self, limit: usize, since: Option<DateTime<Utc>>) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
         let mut data: Vec<ChartDataset> = vec!();
 
-        // "...group by product_id..."
+        // "select...group by product_id..."
         for prod_id in ProductId::iter() {
-
-            // TODO: is this making numerous in-memory copies with all the collects?
-
-            // // 'group by product_id', limit query target to 1000 before filtering(?)
-            // let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
-            //     .rev().collect::<Vec<&Ticker>>()[0..LIMIT_RETURN_SIZE].iter()
-            //     .filter(|f| f.product_id == prod_id)
-            //     .map(|x| { ChartTimeSeries { x: x.dtg, y: x.price } })
-            //     .collect();
 
             // 'group by product_id', limit query target to 1000 (or fewer) after filtering(?)
             let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
                 // .rev()
-                .filter(|f| f.product_id == prod_id)
-                .take(LIMIT_RETURN_SIZE)
+                .filter(|f| {
+                    f.product_id == prod_id
+                        &&
+                    if since.is_none() {
+                        // no since specified
+                        true
+                    } else {
+                        f.dtg >= since.unwrap()
+                    }
+                })
+                .take(limit)
                 .map(|x| { ChartTimeSeries { x: x.dtg, y: x.price } })
                 .collect();
-
-            // let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
-            //     .rev()
-            //     .filter(|f| f.product_id == prod_id)
-            //     .map(|x| { ChartTimeSeries { x: x.dtg, y: x.price } })
-            //     .collect();
 
             let chart = ChartDataset {
                 label: prod_id.to_string(),
@@ -114,15 +91,28 @@ impl EventLog {
             };
             data.push(chart);
 
-
             // "...group by product_id, calculation_id..."
             for calc_id in CalculationId::iter(){
                 // grouped by product ID
                 let time_series_f64: Vec<ChartTimeSeries> = self.calc_log
                     .iter()
                     // .rev()
-                    .filter(|f| f.prod_id == prod_id && f.calc_id == calc_id)
-                    .take(LIMIT_RETURN_SIZE)
+                    .filter(|f|
+
+                        f.prod_id == prod_id && f.calc_id == calc_id
+                        &&
+                        if since.is_none() {
+                            // no since specified
+                            true
+                        } else {
+                            f.dtg >= since.unwrap()
+                        }
+
+                    )
+                    .take(
+                        limit
+                        // todo: since compare like above
+                    )
                     .map(|x|{
                         ChartTimeSeries { x: x.dtg, y: x.val }
                     })
@@ -138,40 +128,7 @@ impl EventLog {
         Ok(data)
     }
 
-
-    // /// No SQL solution; calculate the difference between two moving averages of the previous N price changes.
-    // pub fn _calc_curve_diff_rust(&self, curve_n0: CalculationId, curve_n1: CalculationId, prod_id:ProductId) ->(TickerCalc, TickerCalc)  {
-    //     // tracing::debug!("[calc_curve_diff_rust]");
-    //     let start = Instant::now();
-    //     let calc0 = self.calculate_moving_avg_n(&curve_n0, &prod_id).unwrap();
-    //     let calc1 = self.calculate_moving_avg_n(&curve_n1, &prod_id).unwrap();
-    //     let avg_0 = calc0.val;
-    //     let avg_1 = calc1.val;
-    //     let diff = avg_0 - avg_1;
-    //     let graphic = match diff {
-    //         d if d >= 0.0 => "+++++",
-    //         d if d < 0.0 => "-----",
-    //         _ => "-----",
-    //     };
-    //
-    //     let log_count = self.len();
-    //     tracing::debug!(
-    //         "[calc_curve_diff][{:0>4}:{:0>4}] {graphic} diff: {},\tavg_{:0>4}: {},\tavg_{:0>4}: {}, count: {}, elapsed: {} ms",
-    //         &curve_n0.value(),
-    //         &curve_n1.value(),
-    //         diff,
-    //         &curve_n0.value(),
-    //         avg_0,
-    //         &curve_n1.value(),
-    //         avg_1,
-    //         log_count,
-    //         start.elapsed().as_micros() as f64 / 1000.0
-    //     );
-    //     (calc0, calc1)
-    // }
-
     /// Compute the average of the last N prices
-    /// Uses an RwLock
     pub fn calculate_moving_avg_n(&self, calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
         // tracing::debug!("[calculate_moving_avg_n]");
         let slice_max = calc_id.value();
@@ -203,61 +160,7 @@ impl EventLog {
             val: avg_n,
         })
 
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-    //
-    // /// select * from table...but in raw Rust
-    // pub async fn chart_data_rust_without_sql(&self) -> Result<Chart, KitchenSinkError>  {
-    //     let slice = self.log.as_slice();
-    //
-    //     // TODO: the columns have to be generalized over all the charts
-    //     let dates:Vec<DateTime<Utc>> = slice.iter().rev().map(|x| { x.dtg }).collect();
-    //
-    //     let mut chart_data:Vec<ChartData> = vec!();
-    //
-    //     for stock in ProductId::iter() {
-    //
-    //         // TODO: the separate "keys" have to be separated with their data from the other keys into separate arrays
-    //
-    //         // TODO filter by product_id
-    //         let prices: Vec<f64> = self.log.iter().rev()
-    //             .filter(|x| x.product_id == stock)
-    //             .map(|x| x.price).collect();
-    //
-    //         let cd = ChartData {
-    //             key: stock.to_string(),
-    //             val: prices,
-    //         };
-    //
-    //         chart_data.push(cd);
-    //     }
-    //
-    //     // tracing::info!("dates: {:?}", &dates);
-    //     // tracing::info!("prices: {:?}", &prices);
-    //
-    //     // TODO: de-duplicate where there are multiple products at the exact same time
-    //     Ok(Chart {
-    //         columns: dates,
-    //         chart_data,
-    //     })
-    //
-    // }
-
-
-
-
 
     pub fn schema() -> Schema {
         Schema::new(vec![
@@ -300,29 +203,6 @@ impl EventLog {
         }
     }
 
-    // /// select * from table...but in raw Rust
-    // ///
-    // /// TODO: hard-coded BTC
-    // pub async fn chart_data_as_json_without_sql(&self) -> Result<serde_json::Value, KitchenSinkError>  {
-    //     let slice = self.log.as_slice();
-    //     let dates:Vec<DateTime<Utc>> = slice.iter().map(|x| { x.dtg }).collect();
-    //     let prices:Vec<f64> = self.log.iter().map(|x| x.price).collect();
-    //     tracing::info!("dates: {:?}", &dates);
-    //     tracing::info!("prices: {:?}", &prices);
-    //     let json = serde_json::json!({
-    //         "columns": dates,
-    //         "chart_data":[
-    //             {
-    //                 "key":"BTC",
-    //                 "val": prices
-    //             }
-    //         ]
-    //     });
-    //     // json: Object {"chart_data": Array [Object {"key": String("BTC"), "prices": Array [Number(44203.49), Number(44202.91), Number(44203.35), Number(44203.35), Number(44203.63), Number(44203.63)]}], "columns": Array [String("2023-12-09T00:42:13.031827Z"), String("2023-12-09T00:42:12.268100Z"), String("2023-12-09T00:42:11.456841Z"), String("2023-12-09T00:42:11.453783Z"), String("2023-12-09T00:42:10.996591Z"), String("2023-12-09T00:42:10.996591Z")]}
-    //     tracing::info!("json: {:?}", &json);
-    //     Ok(json)
-    // }
-
     /// select * from table
     pub async fn query_sql_for_chart(&self) -> datafusion::error::Result<DataFrame> {
 
@@ -358,8 +238,6 @@ impl EventLog {
         Ok(df.clone())
     }
 
-
-
     /// Perform calculations on the in-memory data using DataFusion's SQL
     /// select * from table
     pub async fn calc_with_sql(&self) -> datafusion::error::Result<DataFrame> {
@@ -387,7 +265,6 @@ impl EventLog {
         tracing::debug!("[sql] elapsed: {} ms", start.elapsed().as_micros() as f64 / 1000.0);
         Ok(df.clone())
     }
-
 
     /// FYI: DataFusion doesn't by default print chrono DateTimes with the time
     pub fn _print_record_batch(&self) {
@@ -418,11 +295,11 @@ impl EventLog {
         let df = ctx
             .sql(
                 r#"
-            select dtg, description, member, amount, cat as category
-            from t_one
-            order by dtg desc
-            limit 3
-        "#,
+                    select dtg, description, member, amount, cat as category
+                    from t_one
+                    order by dtg desc
+                    limit 3
+                "#,
             )
             .await?;
 
@@ -457,7 +334,7 @@ mod tests {
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::BtcUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 10.0);
 
@@ -467,11 +344,11 @@ mod tests {
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
 
         // last 4 average should be 30; last 10 average should be 20
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::BtcUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 30.0);
 
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, ProductId::BtcUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &ProductId::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 20.0);
 
@@ -488,11 +365,11 @@ mod tests {
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
         let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::BtcUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] test 2 mixed prod_id {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 10.0);
 
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, ProductId::EthUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::EthUsd).unwrap();
         println!("[test_calculate_moving_avg_n] test 2 mixed prod_id {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 500.0);
 

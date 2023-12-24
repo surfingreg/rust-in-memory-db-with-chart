@@ -16,9 +16,8 @@ market_watcher:latest
 */
 
 use arrow_lib::arrow_db;
-use coinbase_websocket::websocket;
+use coinbase_websocket::ws_inbound;
 use common_lib::init::init;
-// use common_lib::operator;
 use visual::http_server;
 
 fn main() {
@@ -39,10 +38,11 @@ fn main() {
     let tx_db = arrow_db::run(tokio_runtime.handle().clone());
 
     // websocket thread
-    let h = websocket::run(tx_db.clone());
+    let h = ws_inbound::run(tx_db.clone());
 
     let tx_db2 = tx_db.clone();
     tokio_runtime.block_on(async {
+        tracing::info!("[main] web server starting on http://127.0.0.1:8080");
         match http_server::run(tx_db2).await{
             Ok(_) => tracing::debug!("[main] web server started on http://127.0.0.1:8080"),
             Err(e) => tracing::debug!("[main] web server not started: {:?}", &e),

@@ -1,4 +1,4 @@
-//! websocket.rs
+//! ws_inbound
 
 use crate::coinbase::Coinbase;
 use crossbeam::channel::Sender;
@@ -14,26 +14,26 @@ use url::Url;
 use common_lib::{Msg, ProductId};
 
 /// Start a new thread listening to the coinbase websocket
-pub fn run(tx_operator: Sender<Msg>) -> JoinHandle<()> {
+pub fn run(tx_db: Sender<Msg>) -> JoinHandle<()> {
     tracing::debug!("[run] spawning websocket...");
     std::thread::spawn(move || {
-        let _ws = ws_connect(tx_operator);
+        let _ws = ws_connect(tx_db);
     })
 }
 
 /// The new thread listening to the coinbase websocket
-pub fn ws_connect(tx: Sender<Msg>) -> Result<(), Box<dyn Error>> {
+pub fn ws_connect(tx_db: Sender<Msg>) -> Result<(), Box<dyn Error>> {
     // https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html
     let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
     tracing::debug!("[websocket_go] url: {}", &url);
     #[allow(unused_mut)]
     let (mut socket, _) = connect(Url::parse(&url)?)?;
-    ws_process(socket, tx);
+    ws_process(socket, tx_db);
     Ok(())
 }
 
 /// Todo: make websocket post-processing asynchronous
-fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx: Sender<Msg>) {
+fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
     // subscribe to coinbase.rs socket for heartbeat and tickers
     let _ = ws.send(Message::Text(generate_websocket_subscribe_json().to_string()));
 
@@ -49,12 +49,9 @@ fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx: Sender<Msg>) {
 
                 let json: Coinbase = serde_json::from_str(&t).unwrap();
                 match json {
-                    Coinbase::Subscriptions(s) => {
-                        tracing::debug!("[Coinbase::Subscriptions] {:?}", &s);
-                    }
+                    Coinbase::Subscriptions(s) => tracing::debug!("[Coinbase::Subscriptions] {:?}", &s),
                     Coinbase::Ticker(t) => {
-                        // tracing::debug!("[Coinbase::Ticker] {:?}", &t);
-                        if let Err(e) = tx.send(Msg::Save(t)) {
+                        if let Err(e) = tx_db.send(Msg::Save(t)) {
                             tracing::error!("[ws_process] send error: {:?}", &e);
                         }
                     }

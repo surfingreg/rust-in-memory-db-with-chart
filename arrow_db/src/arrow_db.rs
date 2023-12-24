@@ -15,6 +15,8 @@ use common_lib::{CalculationId, KitchenSinkError, Msg, ProductId};
 use logger::event_book::EventBook;
 
 const BOOK_NAME_COINBASE:&str="coinbase";
+const LIMIT_RETURN_SIZE:usize = 1000;
+
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
@@ -48,6 +50,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
     // tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
 
     match message {
+
         Msg::Ping => {
             tracing::debug!("[arrow_db] PING");
             Ok(())
@@ -55,6 +58,8 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
         Msg::Save(ticker) => {
             save_ticker(&ticker, evt_book);
+
+            // todo: spawn/async to prevent delaying message processing
             let _ = update_moving_averages(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
             Ok(())
         },
@@ -64,14 +69,41 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
                     tr.block_on(async{
-                        evt_log.chart_multi_from_rust().await
+
+                        // let since = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
+                        // tracing::info!("[RqstChartMulti] since: {}", since);
+
+                        evt_log.chart_multi_from_rust(LIMIT_RETURN_SIZE, None).await
+
                     })
                 },
                 None=> Err(KitchenSinkError::DbError),
             }?;
 
             // tracing::info!("[returning chart] {:?}", &chart);
+            match sender.send(chart) {
+                Err(e)=> {
+                    tracing::error!("[Msg::RequestChartRust] {:?}", &e);
+                    Err(KitchenSinkError::SendError)
+                },
+                _ => Ok(()),
+            }
+        },
 
+        Msg::RqstChartMultiSince {sender, since} => {
+            let evt_book_read_lock = evt_book.book.read().unwrap();
+            let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
+                Some(evt_log)=>{
+                    tr.block_on(async{
+
+                        evt_log.chart_multi_from_rust(LIMIT_RETURN_SIZE, Some(since)).await
+
+                    })
+                },
+                None=> Err(KitchenSinkError::DbError),
+            }?;
+
+            // tracing::info!("[returning chart] {:?}", &chart);
             match sender.send(chart) {
                 Err(e)=> {
                     tracing::error!("[Msg::RequestChartRust] {:?}", &e);
@@ -83,12 +115,9 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
 
         // send a DataFrame back with 'select * from ..."
         Msg::RqstRaw {sender}=>{
-
             let evt_book_read_lock = evt_book.book.read().unwrap();
-
             let df = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
-
                     let df_result = tr.block_on(async{
                         evt_log.query_sql_for_chart().await
                     });
@@ -107,7 +136,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                 Err(_e)=> Err(KitchenSinkError::SendError),
                 _ => Ok(()),
             }
-        }
+        },
 
         _ => {
             tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message);
@@ -125,6 +154,7 @@ fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
 
 /// read lock
 fn update_moving_averages(key: &str, evt_book: &EventBook, prod_id: ProductId) ->Result<(), EventLogError> {
+
     // tracing::debug!("[run_calculations]");
     let start = Instant::now();
     let mut calc = vec![];
@@ -189,7 +219,5 @@ mod tests{
         assert!(serde_json::from_str::<ChartAsJson>(json).is_ok());
 
     }
-
-
 
 }

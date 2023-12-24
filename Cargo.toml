@@ -6,6 +6,7 @@ members = [
     "arrow_db",
     "logger",
     "visual",
+    "ws_broadcast",
 ]
 resolver = "2"
 

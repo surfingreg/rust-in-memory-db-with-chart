@@ -70,6 +70,7 @@ pub enum Msg {
     Start,
     Stop,
     RqstChartMulti {sender: oneshot::Sender<Vec<ChartDataset>> },
+    RqstChartMultiSince {sender: oneshot::Sender<Vec<ChartDataset>>, since:DateTime<Utc> },
     RqstRaw {sender: oneshot::Sender<DataFrame> },
 
     // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },

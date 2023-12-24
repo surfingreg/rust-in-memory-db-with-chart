@@ -1,2 +1,2 @@
 pub mod coinbase;
-pub mod websocket;
+pub mod ws_inbound;
