@@ -14,7 +14,7 @@ use url::Url;
 use common_lib::{Msg, ProductId};
 
 /// Start a new thread listening to the coinbase websocket
-pub fn run(tx_db: Sender<Msg>) -> JoinHandle<()> {
+pub fn run(tx_db: crossbeam::channel::Sender<Msg>) -> JoinHandle<()> {
     tracing::debug!("[run] spawning websocket...");
     std::thread::spawn(move || {
         let _ws = ws_connect(tx_db);

@@ -90,7 +90,7 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
 
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch
-async fn request_chart_multi_data(tx_db:Sender<Msg>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
+async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
     match tx_db.send(Msg::RqstChartMulti {sender}) {
         Ok(_)=> {
