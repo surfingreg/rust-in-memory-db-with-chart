@@ -112,6 +112,9 @@
 let data_map = new Map();
 let chart=null;
 let counter_global = new Map();
+let chart_dataset = [];
+
+
 counter_global.set("z", Array(0, 1, 2, 3));
 
 const $status = document.querySelector('#status')
@@ -138,10 +141,10 @@ function print_data_map() {
 
 function prep_chart_data_map() {
     console.log("[prep_chart_data_map]");
-
-    let prep_array = Array.from(data_map.values()).flat();
-
+    let prep_array = Array.from(data_map.values());
     console.log("[prep_chart_data_map] json: " + JSON.stringify(prep_array));
+
+
 }
 
 function connect() {
@@ -198,7 +201,7 @@ function connect() {
 
                 let new_len = v_data.push(Array.from(inbound_data));
                 let flat_vdata = v_data.flat();
-                console.error("json: " + JSON.stringify(flat_vdata));
+                console.log("json: " + JSON.stringify(flat_vdata));
 
                 let new_ds = {
                     label: inbound_lbl,
@@ -219,7 +222,9 @@ function connect() {
 
         }
 
-        prep_chart_data_map();
+        // prep_chart_data_map();
+        display_chart();
+
 
 
 
@@ -279,38 +284,30 @@ function connect() {
 
 }
 
-// function addData(newData) {
-//   // chart.data.labels.push(label);
-//   chart.data.datasets.forEach((dataset) => {
-//       dataset.data.push(newData);
-//   });
-//   chart.update();
-// }
+function addData(/*label, newData*/) {
+    // chart.data.labels.push(label);
+    // chart.data.datasets.forEach((dataset) => {
+    //   dataset.data.push(newData);
+    // });
+
+    chart.data.datasets = chart_dataset
+    chart.update();
+}
 
 function display_chart() {
 
-    // let dmap_array_value = data_map.values();
-    // for (j of dmap_array_value) {
-    //     console.log("[display_chart] dmap_array value: " + j.label);
-    //     let dataset = data_map.get(j.label);
-    //     console.log("[display_chart]" + dataset.label);
-    //     console.log("[display_chart]" + dataset.data.length);
-    //
-    //     let test_array = Array.from(data_map.values());
-    //     console.log("[display_chart] test_array len: " + test_array.length);
-    //     console.log("[display_chart]" + JSON.stringify(test_array));
-    //
-    // }
+    console.error("[display_chart] **********[onmessage] counter_global: " + counter_global.get("z"));
 
     let test_string = '[{"label":"btc_usd","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.03},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02},{"x":"2023-12-27T04:39:21.940593Z","y":42330.03},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.024999999994},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02333333332},{"x":"2023-12-27T04:39:21.940593Z","y":42330.024999999994},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02285714285},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02166666666},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]}]';
     let test_obj = JSON.parse(test_string);
 
-    let actual_dataset = data_map.values();
+    let actual_dataset = Array.from(data_map.values());
     let actual_json_string = JSON.stringify(Array.from(data_map.values()));
     console.log("[actual_json_string] " + actual_json_string);
 
 
-    let chart_dataset = test_obj;
+    // let chart_dataset = test_obj;
+    chart_dataset = actual_dataset;
 
     if(!chart) {
 
@@ -349,43 +346,7 @@ function display_chart() {
             }
         });
     } else {
-        chart.clear();
-        chart.destroy();
-
-        let ctx = document.getElementById('chart_0').getContext('2d');
-        let chart_title = '{{chart_title}}';
-        chart = new Chart(ctx, {
-            type: 'line',
-            // data: {datasets: Array.from(data_map.values()) },
-            data: {datasets: chart_dataset },
-            options: {
-                animation: {
-                    duration: 0
-                },
-                responsive: true,   // resize to fit browser window
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                stacked: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: chart_title
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time'
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                    },
-                }
-            }
-        });
+        addData();
     }
 
 
