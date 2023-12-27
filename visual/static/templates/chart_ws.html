@@ -132,9 +132,16 @@ function print_data_map() {
 
     console.log("[print_data_map]");
     for(const [k, v] of data_map.entries()) {
-        console.log("[print_data_map] k: " + k + ", v(len): " + v.length);
+        console.log("[print_data_map] k: " + k + ", v(len): " + v.data.length);
     }
+}
 
+function prep_chart_data_map() {
+    console.log("[prep_chart_data_map]");
+
+    let prep_array = Array.from(data_map.values()).flat();
+
+    console.log("[prep_chart_data_map] json: " + JSON.stringify(prep_array));
 }
 
 function connect() {
@@ -177,20 +184,42 @@ function connect() {
             let inbound_lbl = json[i].label;
             let inbound_data = Array.from(json[i].data);
 
+
             console.log("getting inbound_lbl: " + inbound_lbl);
             let v = data_map.get(inbound_lbl);
 
             if(v) {
+                let v_data = v.data;
+
                 console.log("found inbound_lbl: " + inbound_lbl + ": " + inbound_data.length);
                 console.log("[v] v1 size: " + Array.from(v));
-                let new_len = v.push(Array.from(inbound_data));
+
+                // map gets modified by ref; no need to set
+
+                let new_len = v_data.push(Array.from(inbound_data));
+                let flat_vdata = v_data.flat();
+                console.error("json: " + JSON.stringify(flat_vdata));
+
+                let new_ds = {
+                    label: inbound_lbl,
+                    data: flat_vdata
+                };
+                data_map.set(inbound_lbl, new_ds);
                 console.log("v2 size: " + new_len);
+
             } else {
+                // not found in the hashmap
+                let new_ds = {
+                    label: inbound_lbl,
+                    data: Array.from(inbound_data)
+                };
                 console.log("not found inbound_lbl: " + inbound_lbl);
-                data_map.set(inbound_lbl, inbound_data);
+                data_map.set(inbound_lbl, new_ds);
             }
 
         }
+
+        prep_chart_data_map();
 
 
 
