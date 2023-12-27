@@ -160,10 +160,13 @@ impl Server {
 
         for client in self.clients.lock().unwrap().iter() {
 
-            client.lock().unwrap().send(Message::Text(msg.clone())).unwrap()
-
+            match client.lock().unwrap().send(Message::Text(msg.clone())) {
+                Ok(_) => {},
+                Err(e) =>{
+                    tracing::error!("[send_broadcast] send error: {e:?}");
+                },
+            }
         }
-
     }
 
     fn shutdown(ws1: Arc<Mutex<WebSocket<TcpStream>>>) {

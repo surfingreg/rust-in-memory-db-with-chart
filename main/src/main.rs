@@ -128,11 +128,14 @@ fn get_most_recent_date(chart_data: Vec<ChartDataset>) -> DateTime<Utc> {
     tracing::debug!("[main] chart_vec, test2 len: {}", &test2.len());
 
 
-    let max = test2.iter().max().unwrap();
+    let max:DateTime<Utc> = match test2.iter().max(){
+        Some(m) => m.clone(),
+        None => DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-01T04:08:00-00:00").unwrap())
+    };
 
     tracing::debug!("[get_most_recent_date] {}", max);
 
-    max.clone()
+    max
 
 }
 

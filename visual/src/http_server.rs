@@ -5,16 +5,17 @@ use std::fs;
 use std::io::{BufReader, Read};
 use std::str::FromStr;
 use actix_files::NamedFile;
-use actix_web::{web, App, HttpServer, Responder};
+use actix_web::{web, App, HttpServer, Responder, HttpResponse};
 use crossbeam_channel::Sender;
 use handlebars::Handlebars;
+use serde_json::json;
 
 use tokio::try_join;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
 use crate::analysis::{present_chart_multi_line};
 use crate::api_internals::request_raw_data;
-use crate::chat_main::{get_chat, chat_ws, get_chart_ws};
+use crate::chat_main::{get_chat, chat_ws};
 use crate::chat_server::ChatServer;
 
 
@@ -22,6 +23,7 @@ use crate::chat_server::ChatServer;
 async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
     request_raw_data(tx).await
 }
+
 
 
 /// start actix in a new blocking thread
@@ -114,8 +116,25 @@ pub async fn run(tx_operator2: Sender<Msg>) -> Result<(), std::io::Error> {
 
 
 
+// pub async fn get_chart_ws() -> impl Responder {
+//     NamedFile::open_async("visual/static/templates/chart_ws.html").await.unwrap()
+// }
 
+/// show multiple datasets on the same chart, regardless of x-axis count
+pub async fn get_chart_ws(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+    // let tx_db = tx_db.into_inner().as_ref().clone();
 
+    let data = json!({
+        "title": "chart_ws",
+        "parent": "base0",
+        "is_logged_in": true,
+        "chart_title": "TEST_WS",
+        // "data_vec": data_vec_json,
+    });
+    let body = hb.render("chart_ws", &data).unwrap();
+    HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+
+}
 
 
 

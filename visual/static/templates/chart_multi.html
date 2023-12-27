@@ -24,11 +24,13 @@
 
 
 <script>
+
     const c = '{{data_vec}}';
     let json = JSON.parse(c.replace(/&quot;/g, '\"'));
     console.log("json: " + json);
     console.log("j[0] label: " + json[0].label);
-    const rust_datasets = [];
+    // const rust_datasets = [];
+    let data_map = new Map();
 
     for (let i in json){
         console.log("label(" + i + "): " + json[i].label);
@@ -39,19 +41,29 @@
 
         let s = {
             label: json[i].label,
-            // borderColor: 'blue',
             data: json[i].data
         };
 
-        // UI filter: only show BTC for now (even though there's data for more)
+        // TODO: UI filter: only show BTC for now (even though there's data for more)
         if(!s.label.startsWith("eth")){
-            rust_datasets.push(s);
+            // rust_datasets.push(s);
+            data_map.set(json[i].label, s);
         }
 
     }
 
+    // test
+    // for (const [key, value] of data_map) { // Using the default iterator (could be `map.entries()` instead)
+    //     console.log(`key ${key}, value: ${value}`);
+    // }
+
+    // for(let k in data_map.keys()) {
+    //     console.log("keys: " + k);
+    // }
+    //
+
     // ***** dataset format test ****
-    console.log("datasets count: " + rust_datasets.length);
+    console.log("datasets count: " + data_map.length);
     // for (let i in rust_datasets){
     //     console.log("dataset[" + i + "]: " + rust_datasets[i].label);
     //     console.log("dataset[" + i + "]: " + rust_datasets[i].data);
@@ -87,7 +99,7 @@
     let chart = new Chart(ctx, {
         type: 'line',
         // data: { datasets: [s1, s2] },
-        data: { datasets: rust_datasets },
+        data: { datasets: Array.from(data_map.values()) },
         options: {
             animation: {
                 duration: 0

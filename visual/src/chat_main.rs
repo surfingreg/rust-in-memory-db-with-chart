@@ -23,9 +23,7 @@ pub async fn get_chat() -> impl Responder {
     NamedFile::open_async("visual/static/templates/chat.html").await.unwrap()
 }
 
-pub async fn get_chart_ws() -> impl Responder {
-    NamedFile::open_async("visual/static/templates/chart_ws.html").await.unwrap()
-}
+
 
 /// Handshake and start WebSocket handler with heartbeats.
 pub async fn chat_ws(req: HttpRequest, stream: web::Payload, chat_server: web::Data<ChatServerHandle>) -> Result<HttpResponse, Error> {
