@@ -1,9 +1,4 @@
 {{#*inline "page"}}
-<!--<!DOCTYPE html>-->
-<!--<html>-->
-<!--  <head>-->
-<!--    <meta charset="utf-8" />-->
-<!--    <title>Chat!</title>-->
 
 <div><canvas id="chart_0"></canvas><br></div>
 <script src="/js/chart.js"></script>
@@ -12,107 +7,101 @@
 
 <br>
 
+<style>
+  /*:root {*/
+  /*  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,*/
+  /*    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;*/
+  /*  font-size: 18px;*/
+  /*}*/
 
+  input[type='text'] {
+    font-size: inherit;
+  }
 
+  #log {
+    width: 30em;
+    height: 20em;
+    overflow: auto;
+    margin: 0.5em 0;
 
+    border: 1px solid black;
+  }
 
+  #status {
+    padding: 0 0.2em;
+  }
 
-    <style>
-      /*:root {*/
-      /*  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,*/
-      /*    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;*/
-      /*  font-size: 18px;*/
-      /*}*/
+  #text {
+    width: 17em;
+    padding: 0.5em;
+  }
 
-      input[type='text'] {
-        font-size: inherit;
-      }
+  .msg {
+    margin: 0;
+    padding: 0.25em 0.5em;
+  }
 
-      #log {
-        width: 30em;
-        height: 20em;
-        overflow: auto;
-        margin: 0.5em 0;
+  .msg--status {
+    /* a light yellow */
+    background-color: #ffffc9;
+  }
 
-        border: 1px solid black;
-      }
+  .msg--message {
+    /* a light blue */
+    background-color: #d2f4ff;
+  }
 
-      #status {
-        padding: 0 0.2em;
-      }
+  .msg--error {
+    background-color: pink;
+  }
+</style>
 
-      #text {
-        width: 17em;
-        padding: 0.5em;
-      }
+<h1>Chat!</h1>
 
-      .msg {
-        margin: 0;
-        padding: 0.25em 0.5em;
-      }
+<div>
+  <button id="connect">Connect</button>
+  <span>Status:</span>
+  <span id="status">disconnected</span>
+</div>
 
-      .msg--status {
-        /* a light yellow */
-        background-color: #ffffc9;
-      }
+<div id="log"></div>
 
-      .msg--message {
-        /* a light blue */
-        background-color: #d2f4ff;
-      }
+<form id="chatform">
+  <input type="text" id="text" />
+  <input type="submit" id="send" />
+</form>
 
-      .msg--error {
-        background-color: pink;
-      }
-    </style>
-<!--  </head>-->
-<!--  <body>-->
-    <h1>Chat!</h1>
+<hr />
 
-    <div>
-      <button id="connect">Connect</button>
-      <span>Status:</span>
-      <span id="status">disconnected</span>
-    </div>
-
-    <div id="log"></div>
-
-    <form id="chatform">
-      <input type="text" id="text" />
-      <input type="submit" id="send" />
-    </form>
-
-    <hr />
-
-    <section>
-      <h2>Commands</h2>
-      <table style="border-spacing: 0.5em">
-        <tr>
-          <td>
-            <code>/list</code>
-          </td>
-          <td>list all available rooms</td>
-        </tr>
-        <tr>
-          <td>
-            <code>/join name</code>
-          </td>
-          <td>join room, if room does not exist, create new one</td>
-        </tr>
-        <tr>
-          <td>
-            <code>/name name</code>
-          </td>
-          <td>set session name</td>
-        </tr>
-        <tr>
-          <td>
-            <code>some message</code>
-          </td>
-          <td>just string, send message to all peers in same room</td>
-        </tr>
-      </table>
-    </section>
+<section>
+  <h2>Commands</h2>
+  <table style="border-spacing: 0.5em">
+    <tr>
+      <td>
+        <code>/list</code>
+      </td>
+      <td>list all available rooms</td>
+    </tr>
+    <tr>
+      <td>
+        <code>/join name</code>
+      </td>
+      <td>join room, if room does not exist, create new one</td>
+    </tr>
+    <tr>
+      <td>
+        <code>/name name</code>
+      </td>
+      <td>set session name</td>
+    </tr>
+    <tr>
+      <td>
+        <code>some message</code>
+      </td>
+      <td>just string, send message to all peers in same room</td>
+    </tr>
+  </table>
+</section>
 
 <script>
 
@@ -122,7 +111,8 @@
 
 let data_map = new Map();
 let chart=null;
-
+let counter_global = new Map();
+counter_global.set("z", Array(0, 1, 2, 3));
 
 const $status = document.querySelector('#status')
 const $connectButton = document.querySelector('#connect')
@@ -137,6 +127,16 @@ function log(msg, type = 'status') {
     $log.innerHTML += `<p class="msg msg--${type}">${msg}</p>`
     $log.scrollTop += 1000
 }
+
+function print_data_map() {
+
+    console.log("[print_data_map]");
+    for(const [k, v] of data_map.entries()) {
+        console.log("[print_data_map] k: " + k + ", v(len): " + v.length);
+    }
+
+}
+
 function connect() {
     disconnect()
     const { location } = window
@@ -152,51 +152,94 @@ function connect() {
     }
 
     socket.onmessage = (ev) => {
+
+        counter_global.get("z").push(1);
+        console.info("**********[onmessage] counter_global: " + counter_global.get("z"));
+        // console.info("**********[onmessage] data_map size: " + data_map.size);
+        // for(const [key, val] of data_map) {
+        //     console.info("**********[onmessage] data_map label: " + val.label);
+        //     console.info("**********[onmessage] data_map array: " + val.data.length);
+        // }
+
+        // old data
+        print_data_map();
+
+        // new data
         let json = JSON.parse(ev.data);
-        log('Raw: ' + ev.data, 'message')
 
-        for (var i in json) {
-            log('raw: ' + json[i].label, '');
+        console.log('json: ' + JSON.stringify(json))
+        // console.log('[raw] ' + ev.data);
+        // log('raw: ' + ev.data, 'message')
 
-            let curr_label = json[i].label;
-            let xy_array = json[i].data;
+        for (const i in json) {
 
-            console.log("curr_label: " + curr_label);
-            console.log("xy len: " + xy_array.length);
-            for(var j in xy_array) {
+            let inbound_dataset = json[i];
+            let inbound_lbl = json[i].label;
+            let inbound_data = Array.from(json[i].data);
 
-                console.log("xy: " + xy_array[j].x);
-                console.log("xy: " + xy_array[j].y);
+            console.log("getting inbound_lbl: " + inbound_lbl);
+            let v = data_map.get(inbound_lbl);
+
+            if(v) {
+                console.log("found inbound_lbl: " + inbound_lbl + ": " + inbound_data.length);
+                console.log("[v] v1 size: " + Array.from(v));
+                let new_len = v.push(Array.from(inbound_data));
+                console.log("v2 size: " + new_len);
+            } else {
+                console.log("not found inbound_lbl: " + inbound_lbl);
+                data_map.set(inbound_lbl, inbound_data);
             }
 
-            if(!curr_label.startsWith("eth")) {
-                if (xy_array.length > 0) {
-
-                    if (data_map.has(curr_label)) {
-                        // get data array
-                        let old_dataset = data_map.get(curr_label);
-                        old_dataset.data.push(xy_array);
-                        // let dataset = {
-                        //     label: curr_label,
-                        //     data: old_dataset.y
-                        // };
-                        data_map.set(curr_label, old_dataset);
-                        console.log("[0] total " + curr_label + ": " + data_map.get(curr_label).data.length)
-                    } else {
-                        // create
-                        let dataset = {
-                            label: json[i].label,
-                            data: xy_array
-                        };
-                        data_map.set(curr_label, dataset);
-                        console.log("[1] total " + curr_label + ": " + data_map.get(curr_label).data.length)
-                    }
-
-                    display_chart();
-
-                }
-            }
         }
+
+
+
+
+
+
+        //
+        //     console.log("curr_label: " + inbound_lbl);
+        //     console.log("inbound_data len: " + inbound_data.length);
+        //     for(const j in inbound_data) {
+        //         console.log("inbound_data: " + inbound_data[j].x + ", " + inbound_data[j].y);
+        //     }
+        //
+        //     if(!inbound_lbl.startsWith("eth")) {
+        //
+        //         if (inbound_data && inbound_data.length > 0) {
+        //
+        //             if (data_map.has(inbound_lbl)) {
+        //
+        //                 // existing
+        //                 let old_dataset = data_map.get(inbound_lbl);
+        //                 console.log("[existing] len before: " + old_dataset.length);
+        //                 let old_ds_array = Array.from(old_dataset);
+        //                 let new_ds_array = old_ds_array.push(inbound_data);
+        //                 console.log("[existing] len after: " + old_ds_array.length);
+        //                 let new_dataset = {
+        //                     label: inbound_lbl,
+        //                     data: new_ds_array
+        //                 };
+        //
+        //                 data_map.set(inbound_lbl, new_dataset);
+        //                 console.log("[existing] map after: " + data_map.get(inbound_lbl).data.length);
+        //
+        //             }
+        //             else {
+        //
+        //                 // create
+        //                 let new_ds = {
+        //                     label: inbound_lbl,
+        //                     data: Array.from(inbound_data)
+        //                 };
+        //                 data_map.set(inbound_lbl, new_ds);
+        //                 console.log("[1] total " + inbound_lbl + ": " + data_map.get(inbound_lbl).data.length)
+        //             }
+        //             console.log("[create] map after: " + data_map.get(inbound_lbl).data.length);
+        //         }
+        //     }
+        // }
+        // display_chart();
     }
 
     socket.onclose = () => {
@@ -217,28 +260,28 @@ function connect() {
 
 function display_chart() {
 
-
-
-    let dmap_array_value = data_map.values();
-    for (j of dmap_array_value) {
-        console.log("dmap_array value: " + j.label);
-
-        let dataset = data_map.get(j.label);
-
-        console.log(dataset.label);
-        console.log(dataset.data.length);
-
-
-    }
-
-    // console.log("dmap_array: " + dmap_array);
-    // for(var i in dmap_array) {
-    //     console.log("dmap_array: " + dmap_array[i].label);
-    //     console.log("dmap_array x: " + dmap_array[i].x);
-    //     console.log("dmap_array y: " + dmap_array[i].y);
+    // let dmap_array_value = data_map.values();
+    // for (j of dmap_array_value) {
+    //     console.log("[display_chart] dmap_array value: " + j.label);
+    //     let dataset = data_map.get(j.label);
+    //     console.log("[display_chart]" + dataset.label);
+    //     console.log("[display_chart]" + dataset.data.length);
+    //
+    //     let test_array = Array.from(data_map.values());
+    //     console.log("[display_chart] test_array len: " + test_array.length);
+    //     console.log("[display_chart]" + JSON.stringify(test_array));
     //
     // }
 
+    let test_string = '[{"label":"btc_usd","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.03},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02},{"x":"2023-12-27T04:39:21.940593Z","y":42330.03},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.024999999994},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02333333332},{"x":"2023-12-27T04:39:21.940593Z","y":42330.024999999994},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02285714285},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02166666666},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]}]';
+    let test_obj = JSON.parse(test_string);
+
+    let actual_dataset = data_map.values();
+    let actual_json_string = JSON.stringify(Array.from(data_map.values()));
+    console.log("[actual_json_string] " + actual_json_string);
+
+
+    let chart_dataset = test_obj;
 
     if(!chart) {
 
@@ -246,8 +289,8 @@ function display_chart() {
         let chart_title = '{{chart_title}}';
         chart = new Chart(ctx, {
             type: 'line',
-            // data: { datasets: [s1, s2] },
-            data: {datasets: Array.from(data_map.values())},
+            // data: {datasets: Array.from(data_map.values()) },
+            data: {datasets: chart_dataset },
             options: {
                 animation: {
                     duration: 0
@@ -284,8 +327,8 @@ function display_chart() {
         let chart_title = '{{chart_title}}';
         chart = new Chart(ctx, {
             type: 'line',
-            // data: { datasets: [s1, s2] },
-            data: {datasets: Array.from(data_map.values())},
+            // data: {datasets: Array.from(data_map.values()) },
+            data: {datasets: chart_dataset },
             options: {
                 animation: {
                     duration: 0
