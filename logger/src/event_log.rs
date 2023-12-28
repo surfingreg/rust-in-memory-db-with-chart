@@ -80,7 +80,7 @@ impl EventLog {
                         // no since specified
                         true
                     } else {
-                        f.dtg >= since.unwrap()
+                        f.dtg > since.unwrap()
                     }
                 })
                 .take(limit)
@@ -107,7 +107,7 @@ impl EventLog {
                             // no since specified
                             true
                         } else {
-                            f.dtg >= since.unwrap()
+                            f.dtg > since.unwrap()
                         }
 
                     )

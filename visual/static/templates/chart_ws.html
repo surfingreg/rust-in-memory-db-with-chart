@@ -1,6 +1,8 @@
 {{#*inline "page"}}
 
-<div><canvas id="chart_0"></canvas><br></div>
+<div>
+    <canvas id="chart_0"></canvas>
+    <br></div>
 <script src="/js/chart.js"></script>
 <script src="/js/chartjs-adapter-date-fns.js"></script>
 
@@ -8,409 +10,294 @@
 <br>
 
 <style>
-  /*:root {*/
-  /*  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,*/
-  /*    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;*/
-  /*  font-size: 18px;*/
-  /*}*/
+    /*:root {*/
+    /*  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,*/
+    /*    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;*/
+    /*  font-size: 18px;*/
+    /*}*/
 
-  input[type='text'] {
-    font-size: inherit;
-  }
+    input[type='text'] {
+        font-size: inherit;
+    }
 
-  #log {
-    width: 30em;
-    height: 20em;
-    overflow: auto;
-    margin: 0.5em 0;
+    #log {
+        width: 30em;
+        height: 20em;
+        overflow: auto;
+        margin: 0.5em 0;
 
-    border: 1px solid black;
-  }
+        border: 1px solid black;
+    }
 
-  #status {
-    padding: 0 0.2em;
-  }
+    #status {
+        padding: 0 0.2em;
+    }
 
-  #text {
-    width: 17em;
-    padding: 0.5em;
-  }
+    #text {
+        width: 17em;
+        padding: 0.5em;
+    }
 
-  .msg {
-    margin: 0;
-    padding: 0.25em 0.5em;
-  }
+    .msg {
+        margin: 0;
+        padding: 0.25em 0.5em;
+    }
 
-  .msg--status {
-    /* a light yellow */
-    background-color: #ffffc9;
-  }
+    .msg--status {
+        /* a light yellow */
+        background-color: #ffffc9;
+    }
 
-  .msg--message {
-    /* a light blue */
-    background-color: #d2f4ff;
-  }
+    .msg--message {
+        /* a light blue */
+        background-color: #d2f4ff;
+    }
 
-  .msg--error {
-    background-color: pink;
-  }
+    .msg--error {
+        background-color: pink;
+    }
 </style>
 
 <h1>Chat!</h1>
 
 <div>
-  <button id="connect">Connect</button>
-  <span>Status:</span>
-  <span id="status">disconnected</span>
+    <button id="connect">Connect</button>
+    <span>Status:</span>
+    <span id="status">disconnected</span>
 </div>
 
 <div id="log"></div>
 
 <form id="chatform">
-  <input type="text" id="text" />
-  <input type="submit" id="send" />
+    <input type="text" id="text"/>
+    <input type="submit" id="send"/>
 </form>
 
-<hr />
+<hr/>
 
 <section>
-  <h2>Commands</h2>
-  <table style="border-spacing: 0.5em">
-    <tr>
-      <td>
-        <code>/list</code>
-      </td>
-      <td>list all available rooms</td>
-    </tr>
-    <tr>
-      <td>
-        <code>/join name</code>
-      </td>
-      <td>join room, if room does not exist, create new one</td>
-    </tr>
-    <tr>
-      <td>
-        <code>/name name</code>
-      </td>
-      <td>set session name</td>
-    </tr>
-    <tr>
-      <td>
-        <code>some message</code>
-      </td>
-      <td>just string, send message to all peers in same room</td>
-    </tr>
-  </table>
+    <h2>Commands</h2>
+    <table style="border-spacing: 0.5em">
+        <tr>
+            <td>
+                <code>/list</code>
+            </td>
+            <td>list all available rooms</td>
+        </tr>
+        <tr>
+            <td>
+                <code>/join name</code>
+            </td>
+            <td>join room, if room does not exist, create new one</td>
+        </tr>
+        <tr>
+            <td>
+                <code>/name name</code>
+            </td>
+            <td>set session name</td>
+        </tr>
+        <tr>
+            <td>
+                <code>some message</code>
+            </td>
+            <td>just string, send message to all peers in same room</td>
+        </tr>
+    </table>
 </section>
 
 <script>
 
 /*
-[{"label":"btc_usd","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43632.47}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.175}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.20857142857}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43640.97965517244}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43642.78674698797}]}]
+
+  Reload a complete data with every websocket event, instead of small updates. Javascript is annoyingly complex (and not
+   designed) to try to sort and de-duplicate client side. chart_ws_old.html was an earlier attempt that was abandoned.
+
+
+
 */
 
-let data_map = new Map();
-let chart=null;
-let counter_global = new Map();
-let chart_dataset = [];
 
+    /*
+    [{"label":"btc_usd","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43632.47}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.175}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.20857142857}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43640.97965517244}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43642.78674698797}]}]
+    */
 
-counter_global.set("z", Array(0, 1, 2, 3));
+    let chart = null;
+    let chart_dataset = [];
+    const $status = document.querySelector('#status')
+    const $connectButton = document.querySelector('#connect')
+    const $log = document.querySelector('#log')
+    const $form = document.querySelector('#chatform')
+    const $input = document.querySelector('#text')
 
-const $status = document.querySelector('#status')
-const $connectButton = document.querySelector('#connect')
-const $log = document.querySelector('#log')
-const $form = document.querySelector('#chatform')
-const $input = document.querySelector('#text')
+    /** @type {WebSocket | null} */
+    var socket = null
 
-/** @type {WebSocket | null} */
-var socket = null
-
-function log(msg, type = 'status') {
-    $log.innerHTML += `<p class="msg msg--${type}">${msg}</p>`
-    $log.scrollTop += 1000
-}
-
-function print_data_map() {
-
-    console.log("[print_data_map]");
-    for(const [k, v] of data_map.entries()) {
-        console.log("[print_data_map] k: " + k + ", v(len): " + v.data.length);
-    }
-}
-
-function prep_chart_data_map() {
-    console.log("[prep_chart_data_map]");
-    let prep_array = Array.from(data_map.values());
-    console.log("[prep_chart_data_map] json: " + JSON.stringify(prep_array));
-
-
-}
-
-function connect() {
-    disconnect()
-    const { location } = window
-    // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
-    // const wsUri = `${proto}://${location.host}/ws`
-    const wsUri = "ws://127.0.0.1:3012"
-    log('Connecting...')
-    socket = new WebSocket(wsUri);
-
-    socket.onopen = () => {
-        log('Connected')
-        updateConnectionStatus()
+    function log(msg, type = 'status') {
+        $log.innerHTML += `<p class="msg msg--${type}">${msg}</p>`
+        $log.scrollTop += 1000
     }
 
-    socket.onmessage = (ev) => {
+    function connect() {
+        disconnect()
+        const {location} = window
+        // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
+        // const wsUri = `${proto}://${location.host}/ws`
+        const wsUri = "ws://127.0.0.1:3012"
+        log('Connecting...')
+        socket = new WebSocket(wsUri);
 
-        counter_global.get("z").push(1);
-        console.info("**********[onmessage] counter_global: " + counter_global.get("z"));
-        // console.info("**********[onmessage] data_map size: " + data_map.size);
-        // for(const [key, val] of data_map) {
-        //     console.info("**********[onmessage] data_map label: " + val.label);
-        //     console.info("**********[onmessage] data_map array: " + val.data.length);
-        // }
+        socket.onopen = () => {
+            log('Connected')
+            updateConnectionStatus()
+        }
 
-        // old data
-        print_data_map();
-
-        // new data
-        let json = JSON.parse(ev.data);
-
-        console.log('json: ' + JSON.stringify(json))
-        // console.log('[raw] ' + ev.data);
-        // log('raw: ' + ev.data, 'message')
-
-        for (const i in json) {
-
-            let inbound_dataset = json[i];
-            let inbound_lbl = json[i].label;
-            let inbound_data = Array.from(json[i].data);
-
-
-            console.log("getting inbound_lbl: " + inbound_lbl);
-            let v = data_map.get(inbound_lbl);
-
-            if(v) {
-                let v_data = v.data;
-
-                console.log("found inbound_lbl: " + inbound_lbl + ": " + inbound_data.length);
-                console.log("[v] v1 size: " + Array.from(v));
-
-                // map gets modified by ref; no need to set
-
-                let new_len = v_data.push(Array.from(inbound_data));
-                let flat_vdata = v_data.flat();
-                console.log("json: " + JSON.stringify(flat_vdata));
-
-                let new_ds = {
-                    label: inbound_lbl,
-                    data: flat_vdata
-                };
-                data_map.set(inbound_lbl, new_ds);
-                console.log("v2 size: " + new_len);
-
-            } else {
-                // not found in the hashmap
-                let new_ds = {
-                    label: inbound_lbl,
-                    data: Array.from(inbound_data)
-                };
-                console.log("not found inbound_lbl: " + inbound_lbl);
-                data_map.set(inbound_lbl, new_ds);
-            }
+        socket.onmessage = (ev) => {
+            // new data
+            let json = JSON.parse(ev.data);
+            chart_dataset = Array.from(json);
+            display_chart();
 
         }
 
-        // prep_chart_data_map();
-        display_chart();
+        socket.onclose = () => {
+            log('Disconnected')
+            socket = null
+            updateConnectionStatus()
+        }
 
-
-
-
-
-
-
-        //
-        //     console.log("curr_label: " + inbound_lbl);
-        //     console.log("inbound_data len: " + inbound_data.length);
-        //     for(const j in inbound_data) {
-        //         console.log("inbound_data: " + inbound_data[j].x + ", " + inbound_data[j].y);
-        //     }
-        //
-        //     if(!inbound_lbl.startsWith("eth")) {
-        //
-        //         if (inbound_data && inbound_data.length > 0) {
-        //
-        //             if (data_map.has(inbound_lbl)) {
-        //
-        //                 // existing
-        //                 let old_dataset = data_map.get(inbound_lbl);
-        //                 console.log("[existing] len before: " + old_dataset.length);
-        //                 let old_ds_array = Array.from(old_dataset);
-        //                 let new_ds_array = old_ds_array.push(inbound_data);
-        //                 console.log("[existing] len after: " + old_ds_array.length);
-        //                 let new_dataset = {
-        //                     label: inbound_lbl,
-        //                     data: new_ds_array
-        //                 };
-        //
-        //                 data_map.set(inbound_lbl, new_dataset);
-        //                 console.log("[existing] map after: " + data_map.get(inbound_lbl).data.length);
-        //
-        //             }
-        //             else {
-        //
-        //                 // create
-        //                 let new_ds = {
-        //                     label: inbound_lbl,
-        //                     data: Array.from(inbound_data)
-        //                 };
-        //                 data_map.set(inbound_lbl, new_ds);
-        //                 console.log("[1] total " + inbound_lbl + ": " + data_map.get(inbound_lbl).data.length)
-        //             }
-        //             console.log("[create] map after: " + data_map.get(inbound_lbl).data.length);
-        //         }
-        //     }
-        // }
-        // display_chart();
     }
 
-    socket.onclose = () => {
-        log('Disconnected')
-        socket = null
-        updateConnectionStatus()
-    }
 
-}
+    function display_chart() {
 
-function addData(/*label, newData*/) {
-    // chart.data.labels.push(label);
-    // chart.data.datasets.forEach((dataset) => {
-    //   dataset.data.push(newData);
-    // });
+        if (!chart) {
 
-    chart.data.datasets = chart_dataset
-    chart.update();
-}
-
-function display_chart() {
-
-    console.error("[display_chart] **********[onmessage] counter_global: " + counter_global.get("z"));
-
-    let test_string = '[{"label":"btc_usd","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.03},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02},{"x":"2023-12-27T04:39:21.940593Z","y":42330.03},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.024999999994},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02333333332},{"x":"2023-12-27T04:39:21.940593Z","y":42330.024999999994},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02285714285},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02166666666},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]}]';
-    let test_obj = JSON.parse(test_string);
-
-    let actual_dataset = Array.from(data_map.values());
-    let actual_json_string = JSON.stringify(Array.from(data_map.values()));
-    console.log("[actual_json_string] " + actual_json_string);
-
-
-    // let chart_dataset = test_obj;
-    chart_dataset = actual_dataset;
-
-    if(!chart) {
-
-        let ctx = document.getElementById('chart_0').getContext('2d');
-        let chart_title = '{{chart_title}}';
-        chart = new Chart(ctx, {
-            type: 'line',
-            // data: {datasets: Array.from(data_map.values()) },
-            data: {datasets: chart_dataset },
-            options: {
-                animation: {
-                    duration: 0
-                },
-                responsive: true,   // resize to fit browser window
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                stacked: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: chart_title
+            let ctx = document.getElementById('chart_0').getContext('2d');
+            let chart_title = '{{chart_title}}';
+            chart = new Chart(ctx, {
+                type: 'line',
+                // data: {datasets: Array.from(data_map.values()) },
+                data: {datasets: chart_dataset},
+                options: {
+                    animation: {
+                        duration: 0
+                    },
+                    responsive: true,   // resize to fit browser window
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    stacked: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chart_title
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time'
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                        },
                     }
-                },
-                scales: {
-                    x: {
-                        type: 'time'
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                    },
                 }
-            }
-        });
-    } else {
-        addData();
+            });
+        } else {
+            // addData();
+            chart.clear();
+            chart.destroy();
+            let ctx = document.getElementById('chart_0').getContext('2d');
+            let chart_title = '{{chart_title}}';
+            chart = new Chart(ctx, {
+                type: 'line',
+                // data: {datasets: Array.from(data_map.values()) },
+                data: {datasets: chart_dataset},
+                options: {
+                    animation: {
+                        duration: 0
+                    },
+                    responsive: true,   // resize to fit browser window
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    stacked: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chart_title
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time'
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                        },
+                    }
+                }
+            });
+        }
     }
 
+    function disconnect() {
+        if (socket) {
+            log('Disconnecting...')
+            socket.close()
+            socket = null
 
+            updateConnectionStatus()
+        }
+    }
 
-}
+    function updateConnectionStatus() {
+        if (socket) {
+            $status.style.backgroundColor = 'transparent'
+            $status.style.color = 'green'
+            $status.textContent = `connected`
+            $connectButton.innerHTML = 'Disconnect'
+            $input.focus()
+        } else {
+            $status.style.backgroundColor = 'red'
+            $status.style.color = 'white'
+            $status.textContent = 'disconnected'
+            $connectButton.textContent = 'Connect'
+        }
+    }
 
-function disconnect() {
-    if (socket) {
-        log('Disconnecting...')
-        socket.close()
-        socket = null
+    $connectButton.addEventListener('click', () => {
+        if (socket) {
+            disconnect()
+        } else {
+            connect()
+        }
 
         updateConnectionStatus()
-    }
-}
+    })
+    $form.addEventListener('submit', (ev) => {
+        ev.preventDefault()
 
-function updateConnectionStatus() {
-    if (socket) {
-        $status.style.backgroundColor = 'transparent'
-        $status.style.color = 'green'
-        $status.textContent = `connected`
-        $connectButton.innerHTML = 'Disconnect'
+        const text = $input.value
+
+        log('Sending: ' + text)
+        socket.send(text)
+
+        $input.value = ''
         $input.focus()
-    } else {
-        $status.style.backgroundColor = 'red'
-        $status.style.color = 'white'
-        $status.textContent = 'disconnected'
-        $connectButton.textContent = 'Connect'
-    }
-}
-
-$connectButton.addEventListener('click', () => {
-    if (socket) {
-        disconnect()
-    } else {
-        connect()
-    }
+    })
 
     updateConnectionStatus()
-})
-$form.addEventListener('submit', (ev) => {
-    ev.preventDefault()
 
-    const text = $input.value
-
-    log('Sending: ' + text)
-    socket.send(text)
-
-    $input.value = ''
-    $input.focus()
-})
-
-updateConnectionStatus()
-
-display_chart();
+    display_chart();
 
 </script>
 
-
-
-
-
-
-<!--  </body>-->
-<!--</html>-->
 {{/inline}}
 {{> (lookup this "parent")}}

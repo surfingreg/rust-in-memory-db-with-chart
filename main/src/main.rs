@@ -66,6 +66,7 @@ fn main() {
             // todo: get the date of the last chart data sent and send
 
 
+            // a long, long time ago...
             let mut most_recent_date: DateTime<Utc> = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
 
             loop {
@@ -73,8 +74,8 @@ fn main() {
                 match request_chart_multi_data_since(tx_db3.clone(), most_recent_date).await{
                     Ok(chart_vec) => {
 
-                        most_recent_date = get_most_recent_date(chart_vec.clone());
-
+                        // TODO: remove; just results in a lot of unnecessary javascript work; revisit with WASM
+                        // most_recent_date = get_most_recent_date(chart_vec.clone());
                         // tracing::debug!("[main] chart_data total: {}", &json_str);
 
                         if let Ok(json_str) = serde_json::to_string::<Vec<ChartDataset>>(&chart_vec){

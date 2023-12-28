@@ -98,6 +98,7 @@ pub async fn run(tx_operator2: Sender<Msg>) -> Result<(), std::io::Error> {
             // .route("/ws", web::get().to(ws_index))
             .route("/raw", web::get().to(get_raw))
             .route("/chat", web::get().to(get_chat))
+            .route("/chart_ws_old", web::get().to(get_chart_ws_old))
             .route("/chart_ws", web::get().to(get_chart_ws))
             .route("/ws", web::get().to(chat_ws))
 
@@ -136,7 +137,21 @@ pub async fn get_chart_ws(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handleba
 
 }
 
+/// show multiple datasets on the same chart, regardless of x-axis count
+pub async fn get_chart_ws_old(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+    // let tx_db = tx_db.into_inner().as_ref().clone();
 
+    let data = json!({
+        "title": "chart_ws",
+        "parent": "base0",
+        "is_logged_in": true,
+        "chart_title": "TEST_WS",
+        // "data_vec": data_vec_json,
+    });
+    let body = hb.render("chart_ws_old", &data).unwrap();
+    HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
+
+}
 
 
 
