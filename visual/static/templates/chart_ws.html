@@ -1,13 +1,6 @@
 {{#*inline "page"}}
-
-<div>
-    <canvas id="chart_0"></canvas>
-    <br></div>
 <script src="/js/chart.js"></script>
 <script src="/js/chartjs-adapter-date-fns.js"></script>
-
-
-<br>
 
 <style>
     /*:root {*/
@@ -57,53 +50,17 @@
         background-color: pink;
     }
 </style>
-
-<h1>Chat!</h1>
-
 <div>
     <button id="connect">Connect</button>
     <span>Status:</span>
     <span id="status">disconnected</span>
 </div>
+<div>
+    <canvas id="chart_0"></canvas>
+    <br></div>
+<br>
 
-<div id="log"></div>
 
-<form id="chatform">
-    <input type="text" id="text"/>
-    <input type="submit" id="send"/>
-</form>
-
-<hr/>
-
-<section>
-    <h2>Commands</h2>
-    <table style="border-spacing: 0.5em">
-        <tr>
-            <td>
-                <code>/list</code>
-            </td>
-            <td>list all available rooms</td>
-        </tr>
-        <tr>
-            <td>
-                <code>/join name</code>
-            </td>
-            <td>join room, if room does not exist, create new one</td>
-        </tr>
-        <tr>
-            <td>
-                <code>/name name</code>
-            </td>
-            <td>set session name</td>
-        </tr>
-        <tr>
-            <td>
-                <code>some message</code>
-            </td>
-            <td>just string, send message to all peers in same room</td>
-        </tr>
-    </table>
-</section>
 
 <script>
 
@@ -139,15 +96,16 @@
 
     function connect() {
         disconnect()
+
         const {location} = window
         // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
         // const wsUri = `${proto}://${location.host}/ws`
         const wsUri = "ws://127.0.0.1:3012"
-        log('Connecting...')
+        // log('Connecting...')
         socket = new WebSocket(wsUri);
 
         socket.onopen = () => {
-            log('Connected')
+            // log('Connected')
             updateConnectionStatus()
         }
 
@@ -156,15 +114,13 @@
             let json = JSON.parse(ev.data);
             chart_dataset = Array.from(json);
             display_chart();
-
         }
 
         socket.onclose = () => {
-            log('Disconnected')
+            // log('Disconnected')
             socket = null
             updateConnectionStatus()
         }
-
     }
 
 
@@ -249,10 +205,9 @@
 
     function disconnect() {
         if (socket) {
-            log('Disconnecting...')
+            // log('Disconnecting...')
             socket.close()
             socket = null
-
             updateConnectionStatus()
         }
     }
@@ -278,24 +233,22 @@
         } else {
             connect()
         }
-
         updateConnectionStatus()
     })
-    $form.addEventListener('submit', (ev) => {
-        ev.preventDefault()
 
-        const text = $input.value
-
-        log('Sending: ' + text)
-        socket.send(text)
-
-        $input.value = ''
-        $input.focus()
-    })
-
-    updateConnectionStatus()
+    // $form.addEventListener('submit', (ev) => {
+    //     ev.preventDefault()
+    //     const text = $input.value
+    //     // log('Sending: ' + text)
+    //     socket.send(text)
+    //     $input.value = ''
+    //     $input.focus()
+    //
+    // })
 
     display_chart();
+    connect();
+    updateConnectionStatus()
 
 </script>
 

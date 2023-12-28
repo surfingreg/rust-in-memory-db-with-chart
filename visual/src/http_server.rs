@@ -129,7 +129,7 @@ pub async fn get_chart_ws(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handleba
         "title": "chart_ws",
         "parent": "base0",
         "is_logged_in": true,
-        "chart_title": "TEST_WS",
+        "chart_title": "Coinbase",
         // "data_vec": data_vec_json,
     });
     let body = hb.render("chart_ws", &data).unwrap();
@@ -145,7 +145,7 @@ pub async fn get_chart_ws_old(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Hand
         "title": "chart_ws",
         "parent": "base0",
         "is_logged_in": true,
-        "chart_title": "TEST_WS",
+        "chart_title": "Coinbase",
         // "data_vec": data_vec_json,
     });
     let body = hb.render("chart_ws_old", &data).unwrap();
