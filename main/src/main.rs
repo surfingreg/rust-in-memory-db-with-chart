@@ -67,7 +67,7 @@ fn main() {
 
 
             // a long, long time ago...
-            let mut most_recent_date: DateTime<Utc> = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
+            let most_recent_date: DateTime<Utc> = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
 
             loop {
                 // let since = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
@@ -117,7 +117,7 @@ fn main() {
 
 
 /// TODO: extremely inefficient copying just to get the most recent date
-fn get_most_recent_date(chart_data: Vec<ChartDataset>) -> DateTime<Utc> {
+fn _get_most_recent_date(chart_data: Vec<ChartDataset>) -> DateTime<Utc> {
 
 
     // todo: de-clone() all this
