@@ -4,7 +4,6 @@
 //! data structures.
 //!
 
-use common_lib::cb_ticker::{Ticker};
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
 use logger::event_log::{EventLog, EventLogError};
@@ -57,9 +56,8 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         },
 
         Msg::Save(ticker) => {
-            save_ticker(&ticker, evt_book);
-
-            // todo: spawn/async to prevent delaying message processing
+            // save_ticker(&ticker, evt_book);
+            let _ = evt_book.push_log(BOOK_NAME_COINBASE, &ticker);
             let _ = update_moving_averages(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
             Ok(())
         },
@@ -140,12 +138,12 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
     }
 }
 
-/// locks the event book to get the event log for the new ticker
-fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
-    // tracing::debug!("[save_ticker] POST {:?}", ticker);
-    let _ = evt_book.push_log(BOOK_NAME_COINBASE, ticker);
-
-}
+// /// locks the event book to get the event log for the new ticker
+// fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
+//     // tracing::debug!("[save_ticker] POST {:?}", ticker);
+//     let _ = evt_book.push_log(BOOK_NAME_COINBASE, ticker);
+//
+// }
 
 /// read lock
 fn update_moving_averages(key: &str, evt_book: &EventBook, prod_id: ProductId) ->Result<(), EventLogError> {
