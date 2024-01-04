@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
 use arrow_lib::arrow_db;
 use coinbase_websocket::ws_inbound;
-use common_lib::{ChartDataset, KitchenSinkError, Msg, ProductId};
+use common_lib::{ChartDataset, UniversalError, Msg, ProductId};
 use common_lib::init::init;
 use visual::http_server;
 
@@ -148,6 +148,6 @@ async fn request_chart_multi_data_since(tx_db: crossbeam_channel::Sender<Msg>, s
             let chart = rx.await?;
             Ok(chart)
         },
-        Err(_)=> Err(Box::new(KitchenSinkError::SendError))
+        Err(_)=> Err(Box::new(UniversalError::SendError))
     }
 }

@@ -43,7 +43,7 @@ pub struct ChartTimeSeries {
 
 #[derive(thiserror::Error)]
 #[derive(Debug, PartialEq)]
-pub enum KitchenSinkError {
+pub enum UniversalError {
     #[error("KitchenSinkError")]
     DbError,
     #[error("KitchenSinkError")]

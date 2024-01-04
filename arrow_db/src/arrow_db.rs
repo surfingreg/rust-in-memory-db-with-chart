@@ -10,12 +10,11 @@ use logger::event_log::{EventLog, EventLogError};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Handle;
-use common_lib::{CalculationId, KitchenSinkError, Msg, ProductId};
+use common_lib::{CalculationId, UniversalError, Msg, ProductId};
 use logger::event_book::EventBook;
 
 const BOOK_NAME_COINBASE:&str="coinbase";
 const LIMIT_RETURN_SIZE:usize = 1000;
-
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
 pub fn run(tr: Handle) -> Sender<Msg> {
@@ -45,7 +44,7 @@ pub fn run(tr: Handle) -> Sender<Msg> {
     tx
 }
 
-fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), KitchenSinkError>  {
+fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), UniversalError>  {
     // tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
 
     match message {
@@ -67,19 +66,17 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
                     tr.block_on(async{
-
                         evt_log.get_data_for_multi_line_chart(filter_prod_id, None, LIMIT_RETURN_SIZE).await
-
                     })
                 },
-                None=> Err(KitchenSinkError::DbError),
+                None=> Err(UniversalError::DbError),
             }?;
 
             // tracing::info!("[returning chart] {:?}", &chart);
             match sender.send(chart) {
                 Err(e)=> {
                     tracing::error!("[Msg::RequestChartRust] {:?}", &e);
-                    Err(KitchenSinkError::SendError)
+                    Err(UniversalError::SendError)
                 },
                 _ => Ok(()),
             }
@@ -93,14 +90,14 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         evt_log.get_data_for_multi_line_chart(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
                     })
                 },
-                None=> Err(KitchenSinkError::DbError),
+                None=> Err(UniversalError::DbError),
             }?;
 
             // tracing::info!("[returning chart] {:?}", &chart);
             match sender.send(chart) {
                 Err(e)=> {
                     tracing::error!("[Msg::RequestChartRust] {:?}", &e);
-                    Err(KitchenSinkError::SendError)
+                    Err(UniversalError::SendError)
                 },
                 _ => Ok(()),
             }
@@ -118,22 +115,22 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         Ok(df)=>Ok(df),
                         Err(e)=>{
                             tracing::error!("{:?}", e);
-                            Err(KitchenSinkError::DbError)
+                            Err(UniversalError::DbError)
                         }
                     }
                 },
-                None=> Err(KitchenSinkError::DbError),
+                None=> Err(UniversalError::DbError),
             }?;
 
             match sender.send(df) {
-                Err(_e)=> Err(KitchenSinkError::SendError),
+                Err(_e)=> Err(UniversalError::SendError),
                 _ => Ok(()),
             }
         },
 
         _ => {
             tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message);
-            Err(KitchenSinkError::NoMessageMatch)
+            Err(UniversalError::NoMessageMatch)
         },
     }
 }

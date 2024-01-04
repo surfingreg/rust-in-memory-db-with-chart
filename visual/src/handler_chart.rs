@@ -7,7 +7,7 @@ use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{ChartDataset, KitchenSinkError, Msg, ProductId};
+use common_lib::{ChartDataset, UniversalError, Msg, ProductId};
 
 const CHART_MULTI_NAME:&str = "chart_multi";
 
@@ -84,7 +84,7 @@ async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset
             let chart = rx.await?;
             Ok(chart)
         },
-        Err(_)=> Err(Box::new(KitchenSinkError::SendError))
+        Err(_)=> Err(Box::new(UniversalError::SendError))
     }
 }
 

@@ -17,7 +17,7 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
-use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, KitchenSinkError, ProductId};
+use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, UniversalError, ProductId};
 
 const RING_BUF_SIZE: usize = 100;
 const NUM_CALCS: usize = 4;
@@ -62,7 +62,7 @@ impl EventLog {
     ///
     /// todo: filter by product ID
     ///
-    pub async fn get_data_for_multi_line_chart(&self, filter_prod_id: Vec<ProductId>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
+    pub async fn get_data_for_multi_line_chart(&self, filter_prod_id: Vec<ProductId>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, UniversalError>  {
         let mut data: Vec<ChartDataset> = vec!();
 
         // "select...group by product_id..."
