@@ -2,7 +2,7 @@
 //!
 
 use std::error::Error;
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpResponse, Responder};
 use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
@@ -10,6 +10,13 @@ use tokio::sync::oneshot;
 use common_lib::{ChartDataset, KitchenSinkError, Msg, ProductId};
 
 const CHART_MULTI_NAME:&str = "chart_multi";
+
+/**************** HTTP handlers ********************************************************************/
+
+/// GET '/raw'
+pub async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
+    request_raw_data(tx).await
+}
 
 pub async fn redirect_home() -> HttpResponse {
     tracing::debug!("[redirect_home]");
@@ -57,6 +64,8 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
 
 
 
+/**************** Message Passing ******************************************************************/
+
 
 /// Ask the database for data for the chart
 /// TODO: add an enum for the kind of chart to fetch
@@ -68,11 +77,40 @@ async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset
     use strum::IntoEnumIterator;
     let prods:Vec<ProductId> = ProductId::iter().collect();
 
+    // send a list of product IDs we want to filter on; here it's 'select *'
+
     match tx_db.send(Msg::RqstChartMulti {sender, filter_prod_id: prods }) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)
         },
         Err(_)=> Err(Box::new(KitchenSinkError::SendError))
+    }
+}
+
+
+use datafusion::arrow::util::pretty::pretty_format_batches;
+use datafusion::dataframe::DataFrame;
+
+/// clear the mechanics of sending a cross-thread message out of the HTTP handler
+pub async fn request_raw_data(tx: web::Data<Sender<Msg>>) -> impl Responder{
+    let (tx_web, rx_web) = tokio::sync::oneshot::channel::<DataFrame>();
+
+    match tx.send(Msg::RqstRaw { sender: tx_web}) {
+        Ok(_) => match rx_web.await {
+            Ok(df) => {
+                pretty_format_batches(&df.collect().await.unwrap())
+                    .unwrap()
+                    .to_string()
+            }
+            Err(e) => {
+                tracing::error!("[request_raw_data] receive error: {:?}", &e);
+                format!("[request_raw_data] send error: {:?}", &e)
+            }
+        },
+        Err(e) => {
+            tracing::error!("[request_raw_data] send error: {:?}", &e);
+            format!("[request_raw_data] send error: {:?}", &e)
+        }
     }
 }

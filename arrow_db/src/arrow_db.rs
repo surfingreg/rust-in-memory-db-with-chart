@@ -70,10 +70,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                 Some(evt_log)=>{
                     tr.block_on(async{
 
-                        // let since = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
-                        // tracing::info!("[RqstChartMulti] since: {}", since);
-
-                        evt_log.chart_multi_from_rust(filter_prod_id, None, LIMIT_RETURN_SIZE).await
+                        evt_log.get_data_for_multi_line_chart(filter_prod_id, None, LIMIT_RETURN_SIZE).await
 
                     })
                 },
@@ -95,7 +92,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
                 Some(evt_log)=>{
                     tr.block_on(async{
-                        evt_log.chart_multi_from_rust(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
+                        evt_log.get_data_for_multi_line_chart(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
                     })
                 },
                 None=> Err(KitchenSinkError::DbError),

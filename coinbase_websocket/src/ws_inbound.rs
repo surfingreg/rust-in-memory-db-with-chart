@@ -87,9 +87,16 @@ fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) 
                 }
             }
             Err(e) => {
+
                 tracing::error!("[ws_process] error: {:?}", &e);
-                // TODO: websocket error?
-                // Error::ConnectionClosed, etc
+
+                // https://docs.rs/tungstenite/0.21.0/tungstenite/error/enum.Error.html
+                match e {
+                    tungstenite::error::Error::AlreadyClosed | tungstenite::error::Error::ConnectionClosed => {
+                        return;
+                    },
+                    _ => {}
+                }
             }
             _ => {
                 tracing::error!("[ws_process] non-text websocket data");

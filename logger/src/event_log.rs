@@ -17,7 +17,6 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
-// use strum::IntoEnumIterator;
 use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, KitchenSinkError, ProductId};
 
 const RING_BUF_SIZE: usize = 100;
@@ -32,7 +31,6 @@ pub struct EventLog {
 
 #[allow(dead_code)]
 impl EventLog {
-
     pub fn new() -> EventLog {
         EventLog {
             log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
@@ -64,17 +62,17 @@ impl EventLog {
     ///
     /// todo: filter by product ID
     ///
-    pub async fn chart_multi_from_rust(&self, filter_prod_id:Vec<ProductId>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
+    pub async fn get_data_for_multi_line_chart(&self, filter_prod_id: Vec<ProductId>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, KitchenSinkError>  {
         let mut data: Vec<ChartDataset> = vec!();
 
         // "select...group by product_id..."
-        for prod_id in filter_prod_id /*ProductId::iter()*/ {
+        for product_id in filter_prod_id {
 
             // 'group by product_id', limit query target to 1000 (or fewer) after filtering(?)
             let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
                 // .rev()
                 .filter(|f| {
-                    f.product_id == prod_id
+                    f.product_id == product_id
                         &&
                     if since.is_none() {
                         // no since specified
@@ -88,7 +86,7 @@ impl EventLog {
                 .collect();
 
             let chart = ChartDataset {
-                label: prod_id.to_string(),
+                label: product_id.to_string(),
                 data: time_series_data,
             };
             data.push(chart);
@@ -101,7 +99,7 @@ impl EventLog {
                     // .rev()
                     .filter(|f|
 
-                        f.prod_id == prod_id && f.calc_id == calc_id
+                        f.prod_id == product_id && f.calc_id == calc_id
                         &&
                         if since.is_none() {
                             // no since specified
@@ -109,7 +107,6 @@ impl EventLog {
                         } else {
                             f.dtg > since.unwrap()
                         }
-
                     )
                     .take(
                         limit
@@ -121,7 +118,7 @@ impl EventLog {
                     .collect();
 
                 let chart = ChartDataset {
-                    label: format!("{}_{}", prod_id.to_string(), calc_id.to_string()),
+                    label: format!("{}_{}", product_id.to_string(), calc_id.to_string()),
                     data: time_series_f64,
                 };
                 data.push(chart);

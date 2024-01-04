@@ -13,16 +13,9 @@ use serde_json::json;
 use tokio::try_join;
 use common_lib::init::ConfigLocation;
 use common_lib::Msg;
-use crate::analysis::{present_chart_multi_line};
-use crate::api_internals::request_raw_data;
-use crate::chat_main::{get_chat, chat_ws};
-use crate::chat_server::ChatServer;
+use crate::handler_chart::{get_raw, present_chart_multi_line};
 
 
-/// GET '/raw'
-async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
-    request_raw_data(tx).await
-}
 
 
 
@@ -83,33 +76,22 @@ pub async fn run(tx_operator2: Sender<Msg>) -> Result<(), std::io::Error> {
 
     let tx_operator = web::Data::new(tx_operator2.clone());
 
-    let (chat_server, server_tx) = ChatServer::new();
-
-    let chat_server = tokio::spawn(chat_server.run());
-
     let http_server = HttpServer::new(move || {
         App::new()
             .app_data(tx_operator.clone())
             .app_data(handlebars_ref.clone())
-            .app_data(web::Data::new(server_tx.clone()))
             .route("/", web::get().to(present_chart_multi_line))
             .route("/js/chart.js", web::get().to(get_chart_js))
             .route("/js/chartjs-adapter-date-fns.js", web::get().to(get_chart_js_date))
-            // .route("/ws", web::get().to(ws_index))
             .route("/raw", web::get().to(get_raw))
-            .route("/chat", web::get().to(get_chat))
-            .route("/chart_ws_old", web::get().to(get_chart_ws_old))
             .route("/chart_ws", web::get().to(get_chart_ws))
-            .route("/ws", web::get().to(chat_ws))
 
     })
     // .bind_rustls(("127.0.0.1", 8443), config)?
     .bind(("127.0.0.1", 8080))?
     .run();
 
-    try_join!(http_server, async move { chat_server.await.unwrap() })?;
-
-    // http_server.await;
+    try_join!(http_server)?;
 
     Ok(())
 
