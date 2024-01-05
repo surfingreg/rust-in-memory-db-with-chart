@@ -111,8 +111,8 @@ impl ProductId {
 
 #[derive(Debug, Serialize, Deserialize, Display, Clone, EnumIter, PartialEq)]
 pub enum CalculationId {
-    MovingAvg0004,
-    MovingAvg0010,
+    // MovingAvg0004,
+    // MovingAvg0010,
     MovingAvg0100,
     MovingAvg1000,
     MovAvgDiff0100_1000
@@ -121,8 +121,8 @@ pub enum CalculationId {
 impl CalculationId {
     pub fn to_string_coinbase(&self) ->String{
         match self{
-            CalculationId::MovingAvg0004 => "mov_avg_0004".to_string(),
-            CalculationId::MovingAvg0010 => "mov_avg_0010".to_string(),
+            // CalculationId::MovingAvg0004 => "mov_avg_0004".to_string(),
+            // CalculationId::MovingAvg0010 => "mov_avg_0010".to_string(),
             CalculationId::MovingAvg0100 => "mov_avg_0100".to_string(),
             CalculationId::MovingAvg1000 => "mov_avg_1000".to_string(),
             CalculationId::MovAvgDiff0100_1000 => "mov_avg_diff_0100_1000".to_string(),
@@ -131,8 +131,8 @@ impl CalculationId {
 
     pub fn value(&self)-> usize {
         match self{
-            CalculationId::MovingAvg0004 => 4,
-            CalculationId::MovingAvg0010 => 10,
+            // CalculationId::MovingAvg0004 => 4,
+            // CalculationId::MovingAvg0010 => 10,
             CalculationId::MovingAvg0100 => 100,
             CalculationId::MovingAvg1000 => 1000,
             CalculationId::MovAvgDiff0100_1000 => 0,

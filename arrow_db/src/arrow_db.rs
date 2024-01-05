@@ -149,8 +149,8 @@ fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId) ->R
         let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
 
         // moving averages
-        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &prod_id)?);
-        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?);
+        // calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &prod_id)?);
+        // calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?);
         let ma_0100 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0100, &prod_id)?;
         let ma_1000 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg1000, &prod_id)?;
 

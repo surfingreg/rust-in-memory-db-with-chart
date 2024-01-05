@@ -128,9 +128,10 @@ function draw_chart_1() {
 function draw_chart(ctx, dataset, chart_title) {
     return new Chart(ctx, {
         type: 'line',
-        // data: {datasets: Array.from(data_map.values()) },
         data: {datasets: dataset},
         options: {
+            pointRadius: 0,
+            // cubicInterpolationMode: 'monotone',
             maintainAspectRatio: false,
             animation: {
                 duration: 0
