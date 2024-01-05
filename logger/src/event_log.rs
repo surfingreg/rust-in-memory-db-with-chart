@@ -91,14 +91,11 @@ impl EventLog {
             };
             data.push(chart);
 
-            // "...group by product_id, calculation_id..."
+            // "...group by calculation_id..."
             for calc_id in CalculationId::iter(){
-                // grouped by product ID
                 let time_series_f64: Vec<ChartTimeSeries> = self.calc_log
                     .iter()
-                    // .rev()
                     .filter(|f|
-
                         f.prod_id == product_id && f.calc_id == calc_id
                         &&
                         if since.is_none() {
@@ -108,13 +105,8 @@ impl EventLog {
                             f.dtg > since.unwrap()
                         }
                     )
-                    .take(
-                        limit
-                        // todo: since compare like above
-                    )
-                    .map(|x|{
-                        ChartTimeSeries { x: x.dtg, y: x.val }
-                    })
+                    .take(limit)
+                    .map(|x|{ ChartTimeSeries { x: x.dtg, y: x.val } })
                     .collect();
 
                 let chart = ChartDataset {
@@ -143,7 +135,6 @@ impl EventLog {
         // How many copies is this doing?
         let slice_n:&[Ticker] = &self.log.as_slice()[0..slice_max];
         let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == *prod_id).map(|x| x.clone()).collect();
-
         let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
 
         let dtg_of_this_calc:DateTime<Utc> = if slice_n.len() > 0{
@@ -160,6 +151,13 @@ impl EventLog {
         })
 
     }
+
+
+
+
+
+    fn calculate_moving_avg_slope(){}
+
 
     pub fn schema() -> Schema {
         Schema::new(vec![

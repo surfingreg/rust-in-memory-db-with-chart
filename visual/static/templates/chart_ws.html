@@ -1,53 +1,17 @@
 {{#*inline "page"}}
-<script src="/js/chart.js"></script>
-<script src="/js/chartjs-adapter-date-fns.js"></script>
 
 <style>
-    /*:root {*/
-    /*  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,*/
-    /*    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;*/
-    /*  font-size: 18px;*/
-    /*}*/
-
     input[type='text'] {
         font-size: inherit;
-    }
-
-    #log {
-        width: 30em;
-        height: 20em;
-        overflow: auto;
-        margin: 0.5em 0;
-
-        border: 1px solid black;
     }
 
     #status {
         padding: 0 0.2em;
     }
 
-    #text {
-        width: 17em;
-        padding: 0.5em;
-    }
-
     .msg {
         margin: 0;
         padding: 0.25em 0.5em;
-    }
-
-    .msg--status {
-        /* a light yellow */
-        background-color: #ffffc9;
-    }
-
-    .msg--message {
-        /* a light blue */
-        background-color: #d2f4ff;
-    }
-
-    .msg--error {
-        background-color: pink;
     }
 </style>
 <div>
@@ -56,11 +20,16 @@
     <span id="status">disconnected</span>
 </div>
 <div>
-    <canvas id="chart_0"></canvas>
-    <br></div>
-<br>
+    <canvas id="chart_0"></canvas><br>
+</div>
+<div>
+    <canvas id="chart_1"></canvas><br>
+</div>
 
 
+
+<script src="/js/chart.js"></script>
+<script src="/js/chartjs-adapter-date-fns.js"></script>
 
 <script>
 
@@ -74,181 +43,224 @@
 */
 
 
-    /*
-    [{"label":"btc_usd","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43632.47}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.175}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.20857142857}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43640.97965517244}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43642.78674698797}]}]
-    */
+/*
+[{"label":"btc_usd","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43632.47}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.175}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43631.20857142857}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43640.97965517244}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-24T20:00:48.809965Z","y":43642.78674698797}]}]
+*/
 
-    let chart = null;
-    let chart_dataset = [];
-    const $status = document.querySelector('#status')
-    const $connectButton = document.querySelector('#connect')
-    const $log = document.querySelector('#log')
-    const $form = document.querySelector('#chatform')
-    const $input = document.querySelector('#text')
+let chart_0 = null;
+let chart_1 = null;
+let chart_dataset = [];
+const $status = document.querySelector('#status')
+const $connectButton = document.querySelector('#connect')
+const $log = document.querySelector('#log')
+const $form = document.querySelector('#chatform')
+const $input = document.querySelector('#text')
 
-    /** @type {WebSocket | null} */
-    var socket = null
+/** @type {WebSocket | null} */
+var socket = null
 
-    function log(msg, type = 'status') {
-        $log.innerHTML += `<p class="msg msg--${type}">${msg}</p>`
-        $log.scrollTop += 1000
-    }
+function log(msg, type = 'status') {
+    $log.innerHTML += `<p class="msg msg--${type}">${msg}</p>`
+    $log.scrollTop += 1000
+}
 
-    function connect() {
-        disconnect()
+function connect() {
+    disconnect()
 
-        const {location} = window
-        // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
-        // const wsUri = `${proto}://${location.host}/ws`
-        const wsUri = "ws://127.0.0.1:3012"
-        // log('Connecting...')
-        socket = new WebSocket(wsUri);
+    const {location} = window
+    // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
+    // const wsUri = `${proto}://${location.host}/ws`
+    const wsUri = "ws://127.0.0.1:3012"
+    // log('Connecting...')
+    socket = new WebSocket(wsUri);
 
-        socket.onopen = () => {
-            // log('Connected')
-            updateConnectionStatus()
-        }
-
-        socket.onmessage = (ev) => {
-            // new data
-            let json = JSON.parse(ev.data);
-            chart_dataset = Array.from(json);
-            display_chart();
-        }
-
-        socket.onclose = () => {
-            // log('Disconnected')
-            socket = null
-            updateConnectionStatus()
-        }
-    }
-
-
-    function display_chart() {
-
-        if (!chart) {
-
-            let ctx = document.getElementById('chart_0').getContext('2d');
-            let chart_title = '{{chart_title}}';
-            chart = new Chart(ctx, {
-                type: 'line',
-                // data: {datasets: Array.from(data_map.values()) },
-                data: {datasets: chart_dataset},
-                options: {
-                    animation: {
-                        duration: 0
-                    },
-                    responsive: true,   // resize to fit browser window
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    stacked: false,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: chart_title
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'time'
-                        },
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                        },
-                    }
-                }
-            });
-        } else {
-            // addData();
-            chart.clear();
-            chart.destroy();
-            let ctx = document.getElementById('chart_0').getContext('2d');
-            let chart_title = '{{chart_title}}';
-            chart = new Chart(ctx, {
-                type: 'line',
-                // data: {datasets: Array.from(data_map.values()) },
-                data: {datasets: chart_dataset},
-                options: {
-                    animation: {
-                        duration: 0
-                    },
-                    responsive: true,   // resize to fit browser window
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    stacked: false,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: chart_title
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'time'
-                        },
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                        },
-                    }
-                }
-            });
-        }
-    }
-
-    function disconnect() {
-        if (socket) {
-            // log('Disconnecting...')
-            socket.close()
-            socket = null
-            updateConnectionStatus()
-        }
-    }
-
-    function updateConnectionStatus() {
-        if (socket) {
-            $status.style.backgroundColor = 'transparent'
-            $status.style.color = 'green'
-            $status.textContent = `connected`
-            $connectButton.innerHTML = 'Disconnect'
-            $input.focus()
-        } else {
-            $status.style.backgroundColor = 'red'
-            $status.style.color = 'white'
-            $status.textContent = 'disconnected'
-            $connectButton.textContent = 'Connect'
-        }
-    }
-
-    $connectButton.addEventListener('click', () => {
-        if (socket) {
-            disconnect()
-        } else {
-            connect()
-        }
+    socket.onopen = () => {
+        // log('Connected')
         updateConnectionStatus()
-    })
+    }
 
-    // $form.addEventListener('submit', (ev) => {
-    //     ev.preventDefault()
-    //     const text = $input.value
-    //     // log('Sending: ' + text)
-    //     socket.send(text)
-    //     $input.value = ''
-    //     $input.focus()
-    //
-    // })
+    socket.onmessage = (ev) => {
+        // new data
+        let json = JSON.parse(ev.data);
+        chart_dataset = Array.from(json); // .filter((x) => x.label.startsWith("btc_usd_MovAvgDiff"));
 
-    display_chart();
-    connect();
+        draw_chart_0();
+        draw_chart_1();
+    }
+
+    socket.onclose = () => {
+        // log('Disconnected')
+        socket = null
+        updateConnectionStatus()
+    }
+}
+
+function draw_chart_0() {
+    let ctx = document.getElementById('chart_0').getContext('2d');
+    let chart_title = '{{chart_title}}';
+    const dataset = chart_dataset.filter((x) => !x.label.startsWith("btc_usd_MovAvgDiff"));
+    if(chart_0) {
+        chart_0.destroy()
+    }
+    // draw_chart(chart_0, chart_title, ctx, ds);
+
+    chart_0 = new Chart(ctx, {
+        type: 'line',
+        // data: {datasets: Array.from(data_map.values()) },
+        data: {datasets: dataset},
+        options: {
+            animation: {
+                duration: 0
+            },
+            responsive: true,   // resize to fit browser window
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            stacked: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: chart_title
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time'
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                },
+            }
+        }
+    });
+}
+
+// chart 1
+// does contain the diff calculation
+function draw_chart_1() {
+    let ctx = document.getElementById('chart_1').getContext('2d');
+    let chart_title = '{{chart_title}}';
+    const dataset = chart_dataset.filter((x) => x.label.startsWith("btc_usd_MovAvgDiff"));
+    if(chart_1) {
+        chart_1.destroy()
+    }
+    // draw_chart(chart_1, chart_title, ctx, ds);
+
+    chart_1 = new Chart(ctx, {
+        type: 'line',
+        // data: {datasets: Array.from(data_map.values()) },
+        data: {datasets: dataset},
+        options: {
+            animation: {
+                duration: 0
+            },
+            responsive: true,   // resize to fit browser window
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            stacked: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: chart_title
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time'
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                },
+            }
+        }
+    });
+}
+//
+// function draw_chart(this_chart, chart_title, ctx, dataset) {
+//
+//     if(this_chart) {
+//         // chart.clear();
+//         this_chart.destroy();
+//     }
+//
+//     this_chart = new Chart(ctx, {
+//         type: 'line',
+//         // data: {datasets: Array.from(data_map.values()) },
+//         data: {datasets: dataset},
+//         options: {
+//             animation: {
+//                 duration: 0
+//             },
+//             responsive: true,   // resize to fit browser window
+//             interaction: {
+//                 mode: 'index',
+//                 intersect: false,
+//             },
+//             stacked: false,
+//             plugins: {
+//                 title: {
+//                     display: true,
+//                     text: chart_title
+//                 }
+//             },
+//             scales: {
+//                 x: {
+//                     type: 'time'
+//                 },
+//                 y: {
+//                     type: 'linear',
+//                     display: true,
+//                     position: 'right',
+//                 },
+//             }
+//         }
+//     });
+// }
+
+function disconnect() {
+    if (socket) {
+        // log('Disconnecting...')
+        socket.close()
+        socket = null
+        updateConnectionStatus()
+    }
+}
+
+function updateConnectionStatus() {
+    if (socket) {
+        $status.style.backgroundColor = 'transparent'
+        $status.style.color = 'green'
+        $status.textContent = `connected`
+        $connectButton.innerHTML = 'Disconnect'
+    } else {
+        $status.style.backgroundColor = 'red'
+        $status.style.color = 'white'
+        $status.textContent = 'disconnected'
+        $connectButton.textContent = 'Connect'
+    }
+}
+
+$connectButton.addEventListener('click', () => {
+    if (socket) {
+        disconnect()
+    } else {
+        connect()
+    }
     updateConnectionStatus()
+})
+
+draw_chart_0();
+draw_chart_1();
+
+connect();
+updateConnectionStatus()
 
 </script>
 

@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Handle;
 use common_lib::{CalculationId, UniversalError, Msg, ProductId};
+use common_lib::cb_ticker::TickerCalc;
 use logger::event_book::EventBook;
 
 const BOOK_NAME_COINBASE:&str="coinbase";
@@ -57,7 +58,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         Msg::Save(ticker) => {
             // save_ticker(&ticker, evt_book);
             let _ = evt_book.push_log(BOOK_NAME_COINBASE, &ticker);
-            let _ = update_moving_averages(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
+            let _ = refresh_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
             Ok(())
         },
 
@@ -135,28 +136,35 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
     }
 }
 
-// /// locks the event book to get the event log for the new ticker
-// fn save_ticker(ticker: &Ticker, evt_book: &EventBook) {
-//     // tracing::debug!("[save_ticker] POST {:?}", ticker);
-//     let _ = evt_book.push_log(BOOK_NAME_COINBASE, ticker);
-//
-// }
 
 /// read lock
-fn update_moving_averages(key: &str, evt_book: &EventBook, prod_id: ProductId) ->Result<(), EventLogError> {
+fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId) ->Result<(), EventLogError> {
 
     // tracing::debug!("[run_calculations]");
     let start = Instant::now();
     let mut calc = vec![];
 
-     {
+    {
         let evt_book_read_lock = evt_book.book.read().unwrap();
         let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
 
+        // moving averages
         calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &prod_id)?);
         calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?);
-        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0100, &prod_id)?);
-        calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg1000, &prod_id)?);
+        let ma_0100 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0100, &prod_id)?;
+        let ma_1000 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg1000, &prod_id)?;
+
+
+        // calculate the moving average diff (ie in an EMA diff algorithm, positive means trending upward, negative means turning down)
+        let ma_diff_0100_1000 = TickerCalc {
+            dtg: (&ma_0100).dtg.clone(),
+            prod_id: (&ma_0100).prod_id.clone(),
+            calc_id: CalculationId::MovAvgDiff0100_1000,
+            val: (&ma_0100).val.clone() - (&ma_1000).val.clone(),
+        };
+        calc.push(ma_0100);
+        calc.push(ma_1000);
+        calc.push(ma_diff_0100_1000);
 
         // ...release read lock (holding read blocks write lock)
     };

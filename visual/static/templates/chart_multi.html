@@ -19,25 +19,27 @@
 <!--</style>-->
 
 <div><canvas id="chart_0"></canvas><br></div>
+<br>
+<div><canvas id="chart_1"></canvas><br></div>
+
+
+
 <script src="/js/chart.js"></script>
 <script src="/js/chartjs-adapter-date-fns.js"></script>
-
-
 <script>
 
     const c = '{{data_vec}}';
     let json = JSON.parse(c.replace(/&quot;/g, '\"'));
-    console.log("json: " + json);
-    console.log("j[0] label: " + json[0].label);
-    // const rust_datasets = [];
+    // console.log("json: " + json);
+    // console.log("j[0] label: " + json[0].label);
     let data_map = new Map();
 
     for (let i in json){
-        console.log("label(" + i + "): " + json[i].label);
+        // console.log("label(" + i + "): " + json[i].label);
         const data_i = json[i].data;
-        for(let j in data_i){
-            console.log("data: " + data_i[j].x + ": " + data_i[j].y);
-        }
+        // for(let j in data_i){
+        //     console.log("data: " + data_i[j].x + ": " + data_i[j].y);
+        // }
 
         let s = {
             label: json[i].label,
@@ -51,72 +53,65 @@
         }
     }
 
-    // ***** dataset format test ****
-    console.log("datasets count: " + data_map.length);
+    draw_chart_0();
+    draw_chart_1();
 
-    // var s1 = {
-    //     label: 's1',
-    //     borderColor: 'blue',
-    //     data: [
-    //         { x: '2017-01-06 18:39:30', y: 100 },
-    //         { x: '2017-01-07 18:39:28', y: 101 },
-    //     ]
-    // };
-    //
-    // var s2 = {
-    //     label: 's2',
-    //     borderColor: 'red',
-    //     data: [
-    //         { x: '2017-01-07 18:00:00', y: 90 },
-    //         { x: '2017-01-08 18:00:00', y: 105 },
-    //     ]
-    // };
+    //  ******** chart 0 *******************
+    // does not contain the diff calculation
+    function draw_chart_0() {
+        let ctx = document.getElementById('chart_0').getContext('2d');
+        let chart_title = '{{chart_title}}';
+        const ds = Array.from(data_map.values()).filter((x) => !x.label.startsWith("btc_usd_MovAvgDiff"));
+        draw_chart(chart_title, ctx, ds);
+    }
 
+    //  ******** chart 1 *******************
+    // does contain the diff calculation
+    function draw_chart_1() {
+        let ctx = document.getElementById('chart_1').getContext('2d');
+        let chart_title = '{{chart_title}}';
+        const ds = Array.from(data_map.values()).filter((x) => x.label.startsWith("btc_usd_MovAvgDiff"));
 
-    /*
+        draw_chart(chart_title, ctx, ds);
+    }
 
-    [{"label":"btc_usd","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.03},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02},{"x":"2023-12-27T04:39:21.940593Z","y":42330.03},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0004","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.024999999994},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02333333332},{"x":"2023-12-27T04:39:21.940593Z","y":42330.024999999994},{"x":"2023-12-27T04:39:20.877366Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0010","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02285714285},{"x":"2023-12-27T04:39:23.112660Z","y":42330.02166666666},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg0100","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]},{"label":"btc_usd_MovingAvg1000","data":[{"x":"2023-12-27T04:39:23.828896Z","y":42330.02374999999},{"x":"2023-12-27T04:39:23.112660Z","y":42330.022857142845},{"x":"2023-12-27T04:39:21.940593Z","y":42330.02333333332},{"x":"2023-12-27T04:39:20.877366Z","y":42330.022},{"x":"2023-12-27T04:39:17.479979Z","y":42330.0225},{"x":"2023-12-27T04:39:17.479979Z","y":42330.02333333333},{"x":"2023-12-27T04:39:17.479979Z","y":42330.024999999994},{"x":"2023-12-27T04:39:13.930413Z","y":42330.03}]}]
+    function draw_chart(chart_title, ctx, dataset) {
 
-
-
-     */
-    let test_string = JSON.stringify(Array.from(data_map.values()));
-    console.log("[test_string] " + test_string);
-
-    let ctx = document.getElementById('chart_0').getContext('2d');
-    let chart_title = '{{chart_title}}';
-    let chart = new Chart(ctx, {
-        type: 'line',
-        // data: { datasets: [s1, s2] },
-        data: { datasets: Array.from(data_map.values()) },
-        options: {
-            animation: {
-                duration: 0
-            },
-            responsive: true,   // resize to fit browser window
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            stacked: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: chart_title
+        let chart = new Chart(ctx, {
+            type: 'line',
+            // data: { datasets: [s1, s2] },
+            data: { datasets: dataset },
+            options: {
+                animation: {
+                    duration: 0
+                },
+                responsive: true,   // resize to fit browser window
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                stacked: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: chart_title
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time'
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                    },
                 }
-            },
-            scales: {
-                x: {
-                    type: 'time'
-                },
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                },
             }
-        }
-    });
+        });
+
+    }
+
 
 </script>
 
