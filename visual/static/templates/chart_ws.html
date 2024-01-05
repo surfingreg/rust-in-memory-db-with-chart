@@ -97,6 +97,7 @@ function connect() {
 
 function draw_chart_0() {
     let ctx = document.getElementById('chart_0').getContext('2d');
+    // ctx.height(500);
     let chart_title = '{{chart_title}}';
     const dataset = chart_dataset.filter((x) => !x.label.startsWith("btc_usd_MovAvgDiff"));
     if(chart_0) {
@@ -109,6 +110,7 @@ function draw_chart_0() {
         // data: {datasets: Array.from(data_map.values()) },
         data: {datasets: dataset},
         options: {
+            // maintainAspectRatio: false,
             animation: {
                 duration: 0
             },
@@ -142,6 +144,7 @@ function draw_chart_0() {
 // does contain the diff calculation
 function draw_chart_1() {
     let ctx = document.getElementById('chart_1').getContext('2d');
+    // ctx.height(500);
     let chart_title = '{{chart_title}}';
     const dataset = chart_dataset.filter((x) => x.label.startsWith("btc_usd_MovAvgDiff"));
     if(chart_1) {
@@ -154,6 +157,7 @@ function draw_chart_1() {
         // data: {datasets: Array.from(data_map.values()) },
         data: {datasets: dataset},
         options: {
+            // maintainAspectRatio: false,
             animation: {
                 duration: 0
             },
@@ -182,47 +186,6 @@ function draw_chart_1() {
         }
     });
 }
-//
-// function draw_chart(this_chart, chart_title, ctx, dataset) {
-//
-//     if(this_chart) {
-//         // chart.clear();
-//         this_chart.destroy();
-//     }
-//
-//     this_chart = new Chart(ctx, {
-//         type: 'line',
-//         // data: {datasets: Array.from(data_map.values()) },
-//         data: {datasets: dataset},
-//         options: {
-//             animation: {
-//                 duration: 0
-//             },
-//             responsive: true,   // resize to fit browser window
-//             interaction: {
-//                 mode: 'index',
-//                 intersect: false,
-//             },
-//             stacked: false,
-//             plugins: {
-//                 title: {
-//                     display: true,
-//                     text: chart_title
-//                 }
-//             },
-//             scales: {
-//                 x: {
-//                     type: 'time'
-//                 },
-//                 y: {
-//                     type: 'linear',
-//                     display: true,
-//                     position: 'right',
-//                 },
-//             }
-//         }
-//     });
-// }
 
 function disconnect() {
     if (socket) {
