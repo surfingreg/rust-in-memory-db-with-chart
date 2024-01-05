@@ -13,16 +13,20 @@
         margin: 0;
         padding: 0.25em 0.5em;
     }
+
+    .wrapper {
+        height: 300px;
+    }
 </style>
 <div>
     <button id="connect">Connect</button>
     <span>Status:</span>
     <span id="status">disconnected</span>
 </div>
-<div>
+<div class="wrapper">
     <canvas id="chart_0"></canvas><br>
 </div>
-<div>
+<div class="wrapper">
     <canvas id="chart_1"></canvas><br>
 </div>
 
@@ -98,46 +102,13 @@ function connect() {
 function draw_chart_0() {
     let ctx = document.getElementById('chart_0').getContext('2d');
     // ctx.height(500);
+
     let chart_title = '{{chart_title}}';
     const dataset = chart_dataset.filter((x) => !x.label.startsWith("btc_usd_MovAvgDiff"));
     if(chart_0) {
         chart_0.destroy()
     }
-    // draw_chart(chart_0, chart_title, ctx, ds);
-
-    chart_0 = new Chart(ctx, {
-        type: 'line',
-        // data: {datasets: Array.from(data_map.values()) },
-        data: {datasets: dataset},
-        options: {
-            // maintainAspectRatio: false,
-            animation: {
-                duration: 0
-            },
-            responsive: true,   // resize to fit browser window
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            stacked: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: chart_title
-                }
-            },
-            scales: {
-                x: {
-                    type: 'time'
-                },
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                },
-            }
-        }
-    });
+    chart_0 = draw_chart(ctx, dataset, chart_title);
 }
 
 // chart 1
@@ -150,18 +121,21 @@ function draw_chart_1() {
     if(chart_1) {
         chart_1.destroy()
     }
-    // draw_chart(chart_1, chart_title, ctx, ds);
+    chart_1 = draw_chart(ctx, dataset, chart_title);
 
-    chart_1 = new Chart(ctx, {
+}
+
+function draw_chart(ctx, dataset, chart_title) {
+    return new Chart(ctx, {
         type: 'line',
         // data: {datasets: Array.from(data_map.values()) },
         data: {datasets: dataset},
         options: {
-            // maintainAspectRatio: false,
+            maintainAspectRatio: false,
             animation: {
                 duration: 0
             },
-            responsive: true,   // resize to fit browser window
+            // responsive: true,   // resize to fit wrapper div
             interaction: {
                 mode: 'index',
                 intersect: false,
@@ -185,6 +159,7 @@ function draw_chart_1() {
             }
         }
     });
+
 }
 
 function disconnect() {
