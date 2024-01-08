@@ -46,6 +46,7 @@ pub fn run(tr: Handle) -> Sender<Msg> {
 }
 
 fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), UniversalError>  {
+
     // tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
 
     match message {
@@ -70,7 +71,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         evt_log.get_data_for_multi_line_chart(filter_prod_id, None, LIMIT_RETURN_SIZE).await
                     })
                 },
-                None=> Err(UniversalError::DbError),
+                None=> Err(UniversalError::DbError("RqstChartMulti".to_string())),
             }?;
 
             // tracing::info!("[returning chart] {:?}", &chart);
@@ -91,7 +92,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         evt_log.get_data_for_multi_line_chart(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
                     })
                 },
-                None=> Err(UniversalError::DbError),
+                None=> Err(UniversalError::DbError("RqstChartMultiSince".to_string())),
             }?;
 
             // tracing::info!("[returning chart] {:?}", &chart);
@@ -116,11 +117,11 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
                         Ok(df)=>Ok(df),
                         Err(e)=>{
                             tracing::error!("{:?}", e);
-                            Err(UniversalError::DbError)
+                            Err(UniversalError::DbError("RqstRaw".to_string()))
                         }
                     }
                 },
-                None=> Err(UniversalError::DbError),
+                None=> Err(UniversalError::DbError("RqstRaw".to_string())),
             }?;
 
             match sender.send(df) {
@@ -150,20 +151,30 @@ fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId) ->R
 
         // moving averages
         // calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &prod_id)?);
-        // calc.push( evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?);
+        let ma_0010 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?;
         let ma_0100 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0100, &prod_id)?;
         let ma_1000 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg1000, &prod_id)?;
 
 
         // calculate the moving average diff (ie in an EMA diff algorithm, positive means trending upward, negative means turning down)
+        let ma_diff_0010_1000 = TickerCalc {
+            dtg: (&ma_0100).dtg.clone(),
+            prod_id: (&ma_0100).prod_id.clone(),
+            calc_id: CalculationId::MovAvgDiff0010_1000,
+            val: (&ma_0010).val.clone() - (&ma_1000).val.clone(),
+        };
+
         let ma_diff_0100_1000 = TickerCalc {
             dtg: (&ma_0100).dtg.clone(),
             prod_id: (&ma_0100).prod_id.clone(),
             calc_id: CalculationId::MovAvgDiff0100_1000,
             val: (&ma_0100).val.clone() - (&ma_1000).val.clone(),
         };
+
+        calc.push(ma_0010);
         calc.push(ma_0100);
         calc.push(ma_1000);
+        calc.push(ma_diff_0010_1000);
         calc.push(ma_diff_0100_1000);
 
         // ...release read lock (holding read blocks write lock)

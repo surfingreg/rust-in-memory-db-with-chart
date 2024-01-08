@@ -11,18 +11,6 @@ use strum_macros::{Display, EnumIter};
 use tokio::sync::oneshot;
 use crate::cb_ticker::Ticker;
 
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct ChartAsJson {
-//     // chart_data: serde_json::Value
-//     pub columns: serde_json::Value,
-//     pub chart_data: serde_json::Value  // aka profit_total (daily)
-// }
-
-
-
-
-
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartDataset {
     pub label: String,
@@ -41,26 +29,31 @@ pub struct ChartTimeSeries {
 
 
 
-#[derive(thiserror::Error)]
-#[derive(Debug, PartialEq)]
+// #[derive(thiserror::Error)]
+#[derive(Debug,Display)]
 pub enum UniversalError {
-    #[error("KitchenSinkError")]
-    DbError,
-    #[error("KitchenSinkError")]
+    // #[error("KitchenSinkError")]
+    DbError(String),
+    // #[error("KitchenSinkError")]
     JsonError,
-    #[error("KitchenSinkError")]
+    // #[error("KitchenSinkError")]
     Serde,
-    #[error("KitchenSinkError")]
+    // #[error("KitchenSinkError")]
     RecvError,
-    #[error("KitchenSinkError")]
+    // #[error("KitchenSinkError")]
     SendError,
-    #[error("KitchenSinkError")]
+    // #[error("KitchenSinkError")]
     NoMessageMatch,
 }
 
+impl std::error::Error for UniversalError {
+
+}
+
+
 
 //
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum Msg {
     // Post(T),
     Save(Ticker),
@@ -112,9 +105,10 @@ impl ProductId {
 #[derive(Debug, Serialize, Deserialize, Display, Clone, EnumIter, PartialEq)]
 pub enum CalculationId {
     // MovingAvg0004,
-    // MovingAvg0010,
+    MovingAvg0010,
     MovingAvg0100,
     MovingAvg1000,
+    MovAvgDiff0010_1000,
     MovAvgDiff0100_1000
 
 }
@@ -122,20 +116,22 @@ impl CalculationId {
     pub fn to_string_coinbase(&self) ->String{
         match self{
             // CalculationId::MovingAvg0004 => "mov_avg_0004".to_string(),
-            // CalculationId::MovingAvg0010 => "mov_avg_0010".to_string(),
+            CalculationId::MovingAvg0010 => "mov_avg_0010".to_string(),
             CalculationId::MovingAvg0100 => "mov_avg_0100".to_string(),
             CalculationId::MovingAvg1000 => "mov_avg_1000".to_string(),
             CalculationId::MovAvgDiff0100_1000 => "mov_avg_diff_0100_1000".to_string(),
+            CalculationId::MovAvgDiff0010_1000 => "mov_avg_diff_0010_1000".to_string(),
         }
     }
 
     pub fn value(&self)-> usize {
         match self{
             // CalculationId::MovingAvg0004 => 4,
-            // CalculationId::MovingAvg0010 => 10,
+            CalculationId::MovingAvg0010 => 10,
             CalculationId::MovingAvg0100 => 100,
             CalculationId::MovingAvg1000 => 1000,
             CalculationId::MovAvgDiff0100_1000 => 0,
+            CalculationId::MovAvgDiff0010_1000 => 0,
         }
     }
 

@@ -134,7 +134,7 @@ impl Server {
                             break;
                         },
                         Cmd::Broadcast(msg_out) => {
-                            tracing::debug!("[server::control_comms] outbound broadcast: {msg_out}");
+                            // tracing::debug!("[server::control_comms] outbound broadcast: {msg_out}");
                             self2.send_broadcast(msg_out);
                         }
                         _ => {},
