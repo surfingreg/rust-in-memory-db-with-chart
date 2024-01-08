@@ -23,26 +23,13 @@ pub struct ChartTimeSeries {
     pub y: f64
 }
 
-
-
-
-
-
-
-// #[derive(thiserror::Error)]
 #[derive(Debug,Display)]
 pub enum UniversalError {
-    // #[error("KitchenSinkError")]
     DbError(String),
-    // #[error("KitchenSinkError")]
     JsonError,
-    // #[error("KitchenSinkError")]
     Serde,
-    // #[error("KitchenSinkError")]
     RecvError,
-    // #[error("KitchenSinkError")]
     SendError,
-    // #[error("KitchenSinkError")]
     NoMessageMatch,
 }
 
@@ -50,9 +37,6 @@ impl std::error::Error for UniversalError {
 
 }
 
-
-
-//
 #[derive(Debug, Display)]
 pub enum Msg {
     // Post(T),
@@ -109,7 +93,8 @@ pub enum CalculationId {
     MovingAvg0100,
     MovingAvg1000,
     MovAvgDiff0010_1000,
-    MovAvgDiff0100_1000
+    MovAvgDiff0100_1000,
+    MovAvgDiffSlope0100_1000,
 
 }
 impl CalculationId {
@@ -121,6 +106,7 @@ impl CalculationId {
             CalculationId::MovingAvg1000 => "mov_avg_1000".to_string(),
             CalculationId::MovAvgDiff0100_1000 => "mov_avg_diff_0100_1000".to_string(),
             CalculationId::MovAvgDiff0010_1000 => "mov_avg_diff_0010_1000".to_string(),
+            CalculationId::MovAvgDiffSlope0100_1000 => "mov_avg_diff_slope_0010_1000".to_string(),
         }
     }
 
@@ -132,6 +118,7 @@ impl CalculationId {
             CalculationId::MovingAvg1000 => 1000,
             CalculationId::MovAvgDiff0100_1000 => 0,
             CalculationId::MovAvgDiff0010_1000 => 0,
+            CalculationId::MovAvgDiffSlope0100_1000 => 0,
         }
     }
 

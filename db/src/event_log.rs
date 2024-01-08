@@ -149,14 +149,55 @@ impl EventLog {
             calc_id: calc_id.clone(),
             val: avg_n,
         })
-
     }
 
 
 
 
 
-    fn calculate_moving_avg_slope(){}
+    /// Rate of change for the moving average diff (quantify up/down rate of the trend)
+    /// TODO: hard-coded BTC
+    pub fn calculate_diff_slope(&self)->Result<TickerCalc, EventLogError>{
+
+        // get most recent calculation with calc_id CalculationId::MovAvgDiff0100_1000
+        // previous_2 should have the most recent dates in the whole array
+        // tracing::debug!("[calculate_diff_slope] {:?}", self.calc_log);
+
+        let previous_2:Vec<&TickerCalc> = self.calc_log.iter()
+            .filter(|x|{
+                x.calc_id == CalculationId::MovAvgDiff0100_1000
+            })
+            .take(2)
+            .collect();
+        // tracing::debug!("[calculate_diff_slope] {:?}", previous_2);
+
+        if previous_2.len() == 2 {
+            // slope (rate of change)
+            let duration_seconds:f64 = (previous_2[0].dtg - previous_2[1].dtg).num_milliseconds() as f64 / 1000.0;
+            let slope = (previous_2[0].val - previous_2[1].val) / duration_seconds;
+
+            if slope.is_finite() {
+
+                // limit output to +/- 10
+                let slope_reasonable = if slope > 10.0 { 10.0} else if slope < -10.0 { -10.0} else {slope};
+
+                let return_val = TickerCalc {
+                    dtg: previous_2[0].dtg.clone(),
+                    prod_id: ProductId::BtcUsd,
+                    calc_id: CalculationId::MovAvgDiffSlope0100_1000,
+                    val: slope_reasonable,
+                };
+                tracing::debug!("[calculate_diff_slope] {:?}", return_val);
+
+                Ok(return_val)
+            }
+            else {
+                Err(EventLogError::CalculationSlopeNotFinite)
+            }
+        } else {
+            Err(EventLogError::CalculationSlope)
+        }
+    }
 
 
     pub fn schema() -> Schema {
@@ -313,6 +354,8 @@ pub enum EventLogError {
     WriteLockError,
     OtherError,
     ArrowError,
+    CalculationSlope,
+    CalculationSlopeNotFinite,
 }
 
 #[cfg(test)]
@@ -322,6 +365,7 @@ mod tests {
     use common_lib::cb_ticker::{Ticker};
     use datafusion::arrow::util::pretty::pretty_format_batches;
     use common_lib::{CalculationId, ProductId};
+    use crate::event_log::EventLog;
 
     #[test]
     fn test_calculate_moving_avg_n(){

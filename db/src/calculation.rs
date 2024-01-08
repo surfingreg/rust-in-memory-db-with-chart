@@ -42,11 +42,27 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
             val: (&ma_0100).val.clone() - (&ma_1000).val.clone(),
         };
 
+
+
+
+        //
+        // let slope_diff_0100_1000 = TickerCalc {
+        //     dtg: (&ma_0100).dtg.clone(),
+        //     prod_id: (&ma_0100).prod_id.clone(),
+        //     calc_id: CalculationId::MovAvgDiff0100_1000,
+        //     val: (&ma_0100).val.clone() - (&ma_1000).val.clone(),
+        // };
+
         calc.push(ma_0010);
         calc.push(ma_0100);
         calc.push(ma_1000);
         calc.push(ma_diff_0010_1000);
         calc.push(ma_diff_0100_1000);
+
+        // get previous ma_diff_0100_1000
+        if let Ok(slope_0100_1000) = evt_log.calculate_diff_slope() {
+            calc.push(slope_0100_1000);
+        }
 
         // ...release read lock (holding read blocks write lock)
     };
