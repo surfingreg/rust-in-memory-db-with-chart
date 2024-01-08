@@ -14,7 +14,7 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
 
     tracing::debug!("[refresh_calculations]");
     let start = Instant::now();
-    let mut calc = vec![];
+    let mut temp = vec![];
 
     {
         let evt_book_read_lock = evt_book.book.read().unwrap();
@@ -40,21 +40,21 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
             val: (&ma_0100).val.clone() - (&ma_1000).val.clone(),
         };
 
-        // let slope_100 = evt_log.calculate_diff_slope(&CalculationId::MovAvgDiff0100_1000, &CalculationId::MovAvgDiffSlope0100_1000, &ProductId::BtcUsd)?;
+        temp.push(ma_0010);
+        temp.push(ma_0100);
+        temp.push(ma_1000);
+        temp.push(ma_diff_0010_1000);
+        temp.push(ma_diff_0100_1000);
 
-        calc.push(ma_0010);
-        calc.push(ma_0100);
-        calc.push(ma_1000);
-        calc.push(ma_diff_0010_1000);
-        calc.push(ma_diff_0100_1000);
-        // calc.push(slope_100);
-
+        if let Ok(slope_100) = evt_log.calculate_diff_slope(&CalculationId::MovAvgDiff0100_1000, &CalculationId::MovAvgDiffSlope0100_1000, &ProductId::BtcUsd) {
+            temp.push(slope_100);
+        }
 
         // ...release read lock (holding read blocks write lock)
     };
 
     // write lock...
-    for c in calc.iter() {
+    for c in temp.iter() {
         let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &c);
     }
 

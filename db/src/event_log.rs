@@ -158,18 +158,22 @@ impl EventLog {
 
     pub fn calculate_diff_slope(&self, source_calc_id: &CalculationId, dest_calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
 
-        tracing::debug!("[calculate_diff_slope]");
+        // tracing::debug!("[calculate_diff_slope]");
 
         let slice_max = source_calc_id.value();
         let r: Vec<&TickerCalc> = self.calc_log.iter().filter(|x| x.prod_id == *prod_id && x.calc_id == *source_calc_id).take(slice_max).collect();
 
+        tracing::debug!("[calculate_diff_slope] r len: {}", r.len());
+
         if r.len()>1 {
 
-            let elapsed_sec:f64 = (r.first().unwrap().dtg - r.last().unwrap().dtg).num_milliseconds() as f64 * 1000.0;
+            let elapsed_sec:f64 = (r.first().unwrap().dtg - r.last().unwrap().dtg).num_milliseconds() as f64 / 1000.0;
             let value_change:f64 = r.first().unwrap().val - r.last().unwrap().val;
-            let slope:f64 = value_change / elapsed_sec;
 
-            tracing::debug!("[calculate_diff_slope] {}", &slope);
+            let VISUAL_CORRECTION_FACTOR = 10.0;
+            let slope:f64 = value_change / elapsed_sec * VISUAL_CORRECTION_FACTOR;
+
+            tracing::debug!("[calculate_diff_slope] value_change: {}, elapsed: {},  {}", &value_change, &elapsed_sec, &slope);
 
             Ok(TickerCalc{
                 dtg: r[0].dtg,
@@ -182,8 +186,6 @@ impl EventLog {
         } else {
             Err(EventLogError::CalculationSlope)
         }
-
-
 
     }
 

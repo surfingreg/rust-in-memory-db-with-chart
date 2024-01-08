@@ -57,7 +57,9 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         Msg::Save(ticker) => {
             // save_ticker(&ticker, evt_book);
             let _ = evt_book.push_log(BOOK_NAME_COINBASE, &ticker);
-            let _ = refresh_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id);
+            if let Err(e) = refresh_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id) {
+                tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
+            }
             Ok(())
         },
 
