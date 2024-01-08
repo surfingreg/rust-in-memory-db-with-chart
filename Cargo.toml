@@ -3,8 +3,7 @@ members = [
     "common_lib",
     "main",
      "coinbase_websocket",
-    "arrow_db",
-    "logger",
+    "db",
     "visual",
     "ws_broadcast",
 ]

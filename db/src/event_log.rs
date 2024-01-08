@@ -317,7 +317,7 @@ pub enum EventLogError {
 
 #[cfg(test)]
 mod tests {
-    use crate::event_log::EventLog;
+    use db::event_log::EventLog;
     use chrono::{DateTime, Utc};
     use common_lib::cb_ticker::{Ticker};
     use datafusion::arrow::util::pretty::pretty_format_batches;

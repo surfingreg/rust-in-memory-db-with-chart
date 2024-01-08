@@ -1,4 +1,4 @@
-//! arrow_db.rs
+//! db.rs
 //!
 //! thread/message receiver for database operations; calls into event_log.rs for the in-memory
 //! data structures.
@@ -6,13 +6,13 @@
 
 use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
-use logger::event_log::{EventLog, EventLogError};
+use crate::event_log::{EventLog, EventLogError};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Handle;
 use common_lib::{CalculationId, UniversalError, Msg, ProductId};
 use common_lib::cb_ticker::TickerCalc;
-use logger::event_book::EventBook;
+use crate::event_book::EventBook;
 
 const BOOK_NAME_COINBASE:&str="coinbase";
 const LIMIT_RETURN_SIZE:usize = 1000;
@@ -38,7 +38,7 @@ pub fn run(tr: Handle) -> Sender<Msg> {
                         tracing::error!("[run] message error: {:?}", e);
                     }
                 }
-                Err(e) => tracing::error!("[arrow_db] error {:?}", &e),
+                Err(e) => tracing::error!("[db] error {:?}", &e),
             }
         }
     });
@@ -47,12 +47,12 @@ pub fn run(tr: Handle) -> Sender<Msg> {
 
 fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), UniversalError>  {
 
-    // tracing::debug!("[arrow_db::process_message] msg:{:?}", &message);
+    // tracing::debug!("[db::process_message] msg:{:?}", &message);
 
     match message {
 
         Msg::Ping => {
-            tracing::debug!("[arrow_db] PING");
+            tracing::debug!("[db] PING");
             Ok(())
         },
 
@@ -131,7 +131,7 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         },
 
         _ => {
-            tracing::debug!("[arrow_db] {:?} UNKNOWN ", &message);
+            tracing::debug!("[db] {:?} UNKNOWN ", &message);
             Err(UniversalError::NoMessageMatch)
         },
     }

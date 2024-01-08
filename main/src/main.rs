@@ -19,10 +19,10 @@ use std::error::Error;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
-use arrow_lib::arrow_db;
 use coinbase_websocket::ws_inbound;
 use common_lib::{ChartDataset, UniversalError, Msg, ProductId};
 use common_lib::init::init;
+use db::arrow_db;
 use visual::http_server;
 
 fn main() {
