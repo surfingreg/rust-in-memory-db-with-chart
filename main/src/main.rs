@@ -1,19 +1,4 @@
-//! main/chat_main
-
-/*
-
-docker run -d \
---rm \
---name market_watcher \
--e RUST_LOG="info" \
--e COINBASE_URL=wss://ws-feed.pro.coinbase.rs.com \
--e COIN_TRADE_LOG_DB_URL=postgres://postgres:PASSWORD@10.1.1.205:54320/coin_test \
--e COINBASE_URL=wss://ws-feed-public.sandbox.pro.coinbase.rs.com \
--e COIN_TRADE_LOG_DB_URL=postgres://postgres:PASSWORD@10.1.1.205:54320/coin_test \
--e TRADE_SIZE_TARGET=0.01 \
-market_watcher:latest
-
-*/
+//! main
 
 use std::error::Error;
 use std::time::Duration;
