@@ -117,7 +117,9 @@ impl CalculationId {
             CalculationId::MovingAvg0100 => 100,
             CalculationId::MovingAvg1000 => 1000,
             CalculationId::MovAvgDiff0010_1000 => 10,
-            CalculationId::MovAvgDiff0100_1000 => 100,
+
+            // this is the number of values the slope will average to reduce jitter
+            CalculationId::MovAvgDiff0100_1000 => 50,
             CalculationId::MovAvgDiffSlope0100_1000 => 0,
         }
     }

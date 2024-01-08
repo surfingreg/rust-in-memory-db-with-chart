@@ -5,6 +5,7 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
+use std::f64::MAX;
 use common_lib::cb_ticker::{Ticker, TickerCalc};
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
@@ -171,7 +172,9 @@ impl EventLog {
             let value_change:f64 = r.first().unwrap().val - r.last().unwrap().val;
 
             let VISUAL_CORRECTION_FACTOR = 10.0;
+            let MAX_RANGE = 10.0;
             let slope:f64 = value_change / elapsed_sec * VISUAL_CORRECTION_FACTOR;
+            let slope = if slope > MAX_RANGE { MAX_RANGE } else if slope < -MAX_RANGE { -MAX_RANGE} else { slope };
 
             tracing::debug!("[calculate_diff_slope] value_change: {}, elapsed: {},  {}", &value_change, &elapsed_sec, &slope);
 

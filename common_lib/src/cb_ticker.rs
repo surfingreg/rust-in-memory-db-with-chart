@@ -11,6 +11,7 @@ use crate::{CalculationId, ProductId};
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct Ticker {
+
     #[serde(rename = "time")]
     pub dtg: DateTime<Utc>,
     pub product_id: ProductId,
@@ -22,12 +23,12 @@ pub struct Ticker {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct TickerCalc {
+
     pub dtg: DateTime<Utc>,
     pub prod_id: ProductId,
     pub calc_id: CalculationId,
     pub val: f64,
-    // pub period_price_diff: Option<f64>,
-    // pub period_time_diff: Option<f64>,
+
 }
 
 // impl TickerCalc {

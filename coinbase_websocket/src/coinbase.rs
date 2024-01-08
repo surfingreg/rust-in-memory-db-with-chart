@@ -1,5 +1,6 @@
 //! coinbase.rs
 
+use chrono::{DateTime, Utc};
 use common_lib::cb_ticker::Ticker;
 use serde::Deserialize;
 
@@ -11,6 +12,7 @@ pub enum Coinbase {
     Ticker(Ticker),
     // L2Update,
     // Snapshot,
+    Error(Error),
 }
 
 #[allow(dead_code)]
@@ -26,5 +28,16 @@ pub struct Channel {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "Subscription")]
 pub struct Subscriptions {
+
     channels: Vec<Channel>,
+}
+
+/// https://docs.cloud.coinbase.com/exchange/docs/websocket-errors
+#[derive(Debug, Deserialize)]
+pub struct Error {
+    #[serde(rename = "time")]
+    pub dtg: DateTime<Utc>,
+    #[serde(rename="type")]
+    coinbase_type:String,
+    message:String,
 }

@@ -47,43 +47,53 @@ fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) 
 
                 // TODO: coinbase can send something weird and crash the whole websocket with this unwrap
 
-                let json: Coinbase = serde_json::from_str(&t).unwrap();
-                match json {
-                    Coinbase::Subscriptions(s) => tracing::debug!("[Coinbase::Subscriptions] {:?}", &s),
-                    Coinbase::Ticker(t) => {
-                        if let Err(e) = tx_db.send(Msg::Save(t)) {
-                            tracing::error!("[ws_process] send error: {:?}", &e);
+                match serde_json::from_str(&t) {
+
+                    Ok(json)=>{
+                        match json {
+                            Coinbase::Subscriptions(s) => tracing::debug!("[Coinbase::Subscriptions] {:?}", & s),
+                            Coinbase::Ticker(t) => {
+                                if let Err(e) = tx_db.send(Msg::Save(t)) {
+                                    tracing::error!("[ws_process] send error: {:?}", & e);
+                                }
+                            }
+                            Coinbase::Heartbeat => {
+                                tracing::debug!("[ws][text] {:?}", & t);
+                                tracing::debug!("[Coinbase::Heartbeat]");
+                                panic!();
+                            },
+                            // 				Some("l2update") => {
+                            // 					// parse json
+                            // 					let l2_update_opt: Option<UpdateL2> = serde_json::from_value(json_val).expect("[L2 Update] json conversion didn't work");
+                            //
+                            // 					// to database
+                            // 					if let Some(obj) = l2_update_opt {
+                            // 						// tracing::debug!("[ws] {:?}", &obj);
+                            // 						self.process_book_update(obj.changes);
+                            // 					}
+                            // 				},
+                            // 				Some("snapshot") => {
+                            // 					// tracing::debug!("[ws] snapshot: {:?}", json_val);
+                            // 					let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
+                            // 					// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
+                            // 					if snapshot_opt.is_some() {
+                            // 						let snap:Snapshot = snapshot_opt.unwrap();
+                            // 						for buy in &snap.bids {
+                            // 							let _ = &self.book_buy.insert(buy.price.clone(), buy.size.clone());
+                            // 						}
+                            // 						for sell in &snap.asks {
+                            // 							let _ = &self.book_sell.insert(sell.price.clone(), sell.size.clone());
+                            // 						}
+                            // 					}
+                            // 				},
+                            Coinbase::Error(error) => {
+                                tracing::error!("[ws_process] coinbase error: {:?}", &error);
+                            }
                         }
+                    },
+                    Err(e)=> {
+                        tracing::error!("[ws_process] serde error: {:?}, \nmessage: {}", &e, &t);
                     }
-                    Coinbase::Heartbeat => {
-                        tracing::debug!("[ws][text] {:?}", &t);
-                        tracing::debug!("[Coinbase::Heartbeat]");
-                        panic!();
-                    }
-                    // 				Some("l2update") => {
-                    // 					// parse json
-                    // 					let l2_update_opt: Option<UpdateL2> = serde_json::from_value(json_val).expect("[L2 Update] json conversion didn't work");
-                    //
-                    // 					// to database
-                    // 					if let Some(obj) = l2_update_opt {
-                    // 						// tracing::debug!("[ws] {:?}", &obj);
-                    // 						self.process_book_update(obj.changes);
-                    // 					}
-                    // 				},
-                    // 				Some("snapshot") => {
-                    // 					// tracing::debug!("[ws] snapshot: {:?}", json_val);
-                    // 					let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
-                    // 					// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
-                    // 					if snapshot_opt.is_some() {
-                    // 						let snap:Snapshot = snapshot_opt.unwrap();
-                    // 						for buy in &snap.bids {
-                    // 							let _ = &self.book_buy.insert(buy.price.clone(), buy.size.clone());
-                    // 						}
-                    // 						for sell in &snap.asks {
-                    // 							let _ = &self.book_sell.insert(sell.price.clone(), sell.size.clone());
-                    // 						}
-                    // 					}
-                    // 				},
                 }
             }
             Err(e) => {
