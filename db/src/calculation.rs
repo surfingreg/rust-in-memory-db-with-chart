@@ -26,12 +26,12 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
         let ma_1000 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg1000, &prod_id)?;
 
         // calculate the moving average diff (ie in an EMA diff algorithm, positive means trending upward, negative means turning down)
-        let ma_diff_0010_1000 = TickerCalc {
-            dtg: (&ma_0100).dtg.clone(),
-            prod_id: (&ma_0100).prod_id.clone(),
-            calc_id: CalculationId::MovAvgDiff0010_1000,
-            val: (&ma_0010).val.clone() - (&ma_1000).val.clone(),
-        };
+        // let ma_diff_0010_1000 = TickerCalc {
+        //     dtg: (&ma_0100).dtg.clone(),
+        //     prod_id: (&ma_0100).prod_id.clone(),
+        //     calc_id: CalculationId::MovAvgDiff0010_1000,
+        //     val: (&ma_0010).val.clone() - (&ma_1000).val.clone(),
+        // };
 
         let ma_diff_0100_1000 = TickerCalc {
             dtg: (&ma_0100).dtg.clone(),
@@ -43,7 +43,7 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
         temp.push(ma_0010);
         temp.push(ma_0100);
         temp.push(ma_1000);
-        temp.push(ma_diff_0010_1000);
+        // temp.push(ma_diff_0010_1000);
         temp.push(ma_diff_0100_1000);
 
         if let Ok(slope_100) = evt_log.calculate_diff_slope(&CalculationId::MovAvgDiff0100_1000, &CalculationId::MovAvgDiffSlope0100_1000, &ProductId::BtcUsd) {
