@@ -22,15 +22,23 @@ pub struct Ticker {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct TickerCalc {
-
     pub dtg: DateTime<Utc>,
-
     pub prod_id: ProductId,
-
     pub calc_id: CalculationId,
-
     pub val: f64,
+    // pub period_price_diff: Option<f64>,
+    // pub period_time_diff: Option<f64>,
 }
+
+// impl TickerCalc {
+//     pub fn slope(&self)->Option<f64> {
+//         if self.period_price_diff.is_some() && self.period_time_diff.is_some() {
+//             Some(self.period_price_diff.unwrap() / self.period_time_diff.unwrap())
+//         } else {
+//             None
+//         }
+//     }
+// }
 
 
 

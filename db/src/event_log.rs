@@ -51,7 +51,7 @@ impl EventLog {
         Ok(())
     }
 
-    /// push into this custom event log; thread safe
+    /// push TickerCalc
     pub fn push_calc(&mut self, ticker: &TickerCalc) -> Result<(), EventLogError> {
         self.calc_log.push_front((*ticker).clone());
         Ok(())
@@ -121,6 +121,7 @@ impl EventLog {
 
     /// Compute the average of the last N prices
     pub fn calculate_moving_avg_n(&self, calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
+
         // tracing::debug!("[calculate_moving_avg_n]");
         let slice_max = calc_id.value();
 
@@ -132,71 +133,58 @@ impl EventLog {
             slice_max
         };
 
-        // How many copies is this doing?
+        // todo: de-clone
         let slice_n:&[Ticker] = &self.log.as_slice()[0..slice_max];
         let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == *prod_id).map(|x| x.clone()).collect();
         let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
 
-        let dtg_of_this_calc:DateTime<Utc> = if slice_n.len() > 0{
+        let dtg_this_calc:DateTime<Utc> = if slice_n.len() > 0{
             slice_n[0].dtg
         } else {
             Utc::now()
         };
 
         Ok(TickerCalc{
-            dtg: dtg_of_this_calc,
+            dtg: dtg_this_calc,
             prod_id: prod_id.clone(),
             calc_id: calc_id.clone(),
             val: avg_n,
         })
+
     }
-
-
-
-
 
     /// Rate of change for the moving average diff (quantify up/down rate of the trend)
     /// TODO: hard-coded BTC
-    pub fn calculate_diff_slope(&self)->Result<TickerCalc, EventLogError>{
 
-        // get most recent calculation with calc_id CalculationId::MovAvgDiff0100_1000
-        // previous_2 should have the most recent dates in the whole array
-        // tracing::debug!("[calculate_diff_slope] {:?}", self.calc_log);
+    pub fn calculate_diff_slope(&self, source_calc_id: &CalculationId, dest_calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
 
-        let previous_2:Vec<&TickerCalc> = self.calc_log.iter()
-            .filter(|x|{
-                x.calc_id == CalculationId::MovAvgDiff0100_1000
+        tracing::debug!("[calculate_diff_slope]");
+
+        let slice_max = source_calc_id.value();
+        let r: Vec<&TickerCalc> = self.calc_log.iter().filter(|x| x.prod_id == *prod_id && x.calc_id == *source_calc_id).take(slice_max).collect();
+
+        if r.len()>1 {
+
+            let elapsed_sec:f64 = (r.first().unwrap().dtg - r.last().unwrap().dtg).num_milliseconds() as f64 * 1000.0;
+            let value_change:f64 = r.first().unwrap().val - r.last().unwrap().val;
+            let slope:f64 = value_change / elapsed_sec;
+
+            tracing::debug!("[calculate_diff_slope] {}", &slope);
+
+            Ok(TickerCalc{
+                dtg: r[0].dtg,
+                prod_id: prod_id.clone(),
+                calc_id: dest_calc_id.clone(),
+                val: slope,
             })
-            .take(2)
-            .collect();
-        // tracing::debug!("[calculate_diff_slope] {:?}", previous_2);
 
-        if previous_2.len() == 2 {
-            // slope (rate of change)
-            let duration_seconds:f64 = (previous_2[0].dtg - previous_2[1].dtg).num_milliseconds() as f64 / 1000.0;
-            let slope = (previous_2[0].val - previous_2[1].val) / duration_seconds;
 
-            if slope.is_finite() {
-
-                // limit output to +/- 10
-                let slope_reasonable = if slope > 10.0 { 10.0} else if slope < -10.0 { -10.0} else {slope};
-
-                let return_val = TickerCalc {
-                    dtg: previous_2[0].dtg.clone(),
-                    prod_id: ProductId::BtcUsd,
-                    calc_id: CalculationId::MovAvgDiffSlope0100_1000,
-                    val: slope_reasonable,
-                };
-                tracing::debug!("[calculate_diff_slope] {:?}", return_val);
-
-                Ok(return_val)
-            }
-            else {
-                Err(EventLogError::CalculationSlopeNotFinite)
-            }
         } else {
             Err(EventLogError::CalculationSlope)
         }
+
+
+
     }
 
 

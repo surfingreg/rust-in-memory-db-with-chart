@@ -61,19 +61,18 @@ impl EventBook {
 
     /// get write lock on the entire book and insert a new record
     pub fn push_calc(&self, key: &str, val: &TickerCalc) -> Result<(), BookError> {
-        // tracing::debug!("[push_calc]");
+        tracing::debug!("[push_calc]");
 
         // write lock
         let mut book_writable = self.book.write().unwrap();
 
         // tracing::debug!("[push_calc] got write lock");
-
         match book_writable.get_mut(key) {
             Some(calc_log) => {
                 // an event log exists for this key
-
                 // TODO un-unwrap
                 calc_log.push_calc(val).unwrap();
+                tracing::debug!("[push_calc] calc log size: {}", calc_log.len());
                 Ok(())
             }
             None => {
@@ -97,6 +96,7 @@ impl EventBook {
                 }
             }
         }
+
     }
 }
 

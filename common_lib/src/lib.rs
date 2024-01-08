@@ -104,8 +104,8 @@ impl CalculationId {
             CalculationId::MovingAvg0010 => "mov_avg_0010".to_string(),
             CalculationId::MovingAvg0100 => "mov_avg_0100".to_string(),
             CalculationId::MovingAvg1000 => "mov_avg_1000".to_string(),
-            CalculationId::MovAvgDiff0100_1000 => "mov_avg_diff_0100_1000".to_string(),
             CalculationId::MovAvgDiff0010_1000 => "mov_avg_diff_0010_1000".to_string(),
+            CalculationId::MovAvgDiff0100_1000 => "mov_avg_diff_0100_1000".to_string(),
             CalculationId::MovAvgDiffSlope0100_1000 => "mov_avg_diff_slope_0010_1000".to_string(),
         }
     }
@@ -116,8 +116,8 @@ impl CalculationId {
             CalculationId::MovingAvg0010 => 10,
             CalculationId::MovingAvg0100 => 100,
             CalculationId::MovingAvg1000 => 1000,
-            CalculationId::MovAvgDiff0100_1000 => 0,
-            CalculationId::MovAvgDiff0010_1000 => 0,
+            CalculationId::MovAvgDiff0010_1000 => 10,
+            CalculationId::MovAvgDiff0100_1000 => 100,
             CalculationId::MovAvgDiffSlope0100_1000 => 0,
         }
     }
