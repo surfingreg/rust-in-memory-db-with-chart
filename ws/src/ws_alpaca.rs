@@ -101,6 +101,8 @@ pub struct DataMesgSubscriptionListCrypto {
 ///
 /// [{"T":"t","S":"BTC/USD","p":41853,"s":0.01,"t":"2024-01-14T23:36:23.17799008Z","i":8102483281662395354,"tks":"B"}]
 ///
+/// [{"T":"t","S":"BTC/USD","p":41927.9,"s":0.002028277,"t":"2024-01-14T23:46:29.667996827Z","i":4327835828814694871,"tks":"S"}]
+///
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlpacaTrade {
 
@@ -109,9 +111,6 @@ pub struct AlpacaTrade {
 
     #[serde(rename = "i")]
     pub id_trade: u64,
-
-    #[serde(rename = "x")]
-    pub exchange: String,
 
     #[serde(rename = "p")]
     pub price: f64,
@@ -124,9 +123,6 @@ pub struct AlpacaTrade {
 
     pub tks: String,
 
-
-    // #[serde(default = "Utc::now")]
-    // pub dtg_updated: DateTime<Utc>,
 }
 
 /// [{"T":"q","S":"BTC/USD","bp":42135.56,"bs":0.27779,"ap":42176.435,"as":0.550171,"t":"2024-01-14T23:06:25.205996645Z"}]
