@@ -2,7 +2,7 @@
 members = [
     "common_lib",
     "main",
-     "coinbase_websocket",
+    "ws",
     "db",
     "visual",
     "ws_broadcast",

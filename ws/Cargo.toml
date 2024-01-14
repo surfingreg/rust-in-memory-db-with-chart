@@ -1,5 +1,5 @@
 [package]
-name = "coinbase_websocket"
+name = "ws"
 version = "0.1.0"
 authors = ["GregP <glp@swimr.com>"]
 edition = "2018"

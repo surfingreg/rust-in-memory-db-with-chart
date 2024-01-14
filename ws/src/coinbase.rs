@@ -33,6 +33,7 @@ pub struct Subscriptions {
 }
 
 /// https://docs.cloud.coinbase.com/exchange/docs/websocket-errors
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct Error {
     #[serde(rename = "time")]

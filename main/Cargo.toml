@@ -19,5 +19,5 @@ db = { path = "../db" }
 common_lib = { path="../common_lib"}
 ws_broadcast = { path="../ws_broadcast"}
 visual = { path="../visual"}
-coinbase_websocket = { path="../coinbase_websocket"}
+ws = { path= "../ws" }
 

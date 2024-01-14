@@ -5,7 +5,6 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use std::f64::MAX;
 use common_lib::cb_ticker::{Ticker, TickerCalc};
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
@@ -22,6 +21,9 @@ use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, UniversalError, P
 
 const RING_BUF_SIZE: usize = 100;
 const NUM_CALCS: usize = 4;
+const VISUAL_CORRECTION_FACTOR:f64 = 10.0;
+const MAX_RANGE:f64 = 10.0;
+
 
 /// Ring buffer with ability to extract the entire buffer as a slice
 /// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
@@ -171,8 +173,6 @@ impl EventLog {
             let elapsed_sec:f64 = (r.first().unwrap().dtg - r.last().unwrap().dtg).num_milliseconds() as f64 / 1000.0;
             let value_change:f64 = r.first().unwrap().val - r.last().unwrap().val;
 
-            let VISUAL_CORRECTION_FACTOR = 10.0;
-            let MAX_RANGE = 10.0;
             let slope:f64 = value_change / elapsed_sec * VISUAL_CORRECTION_FACTOR;
             let slope = if slope > MAX_RANGE { MAX_RANGE } else if slope < -MAX_RANGE { -MAX_RANGE} else { slope };
 

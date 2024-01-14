@@ -33,7 +33,7 @@ pub fn run(tr: Handle) -> Sender<Msg> {
 
                     // new thread to prevent processing blocking the websocket
                     if let Err(e) = process_message(message, &evt_book, tr.clone()){
-                        tracing::error!("[run] message error: {:?}", e);
+                        tracing::info!("[run] message error: {:?}", e);
                     }
                 }
                 Err(e) => tracing::error!("[db] error {:?}", &e),

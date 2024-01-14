@@ -4,11 +4,11 @@ use std::error::Error;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
-use coinbase_websocket::ws_inbound;
 use common_lib::{ChartDataset, UniversalError, Msg, ProductId};
 use common_lib::init::init;
 use db::arrow_db;
 use visual::http_server;
+use ws::connect::ConnectSource;
 
 fn main() {
 
@@ -27,13 +27,15 @@ fn main() {
     // database thread
     let tx_db = arrow_db::run(tokio_runtime.handle().clone());
 
-    // websocket thread
-    let h = ws_inbound::run(tx_db.clone());
+    // coinbase websocket thread
+    // let h = ws::connect::run(ConnectSource::Coinbase, tx_db.clone());
+
+    // alpaca websocket thread
+    let h = ws::connect::run(ConnectSource::Alpaca, tx_db.clone());
 
     // outbound websocket
     let (server_tx, server_rx) = crossbeam_channel::unbounded::<ws_broadcast::command::Cmd>();
     let _h1 = std::thread::spawn(move || {
-
         std::thread::spawn(|| {
             let mut server = ws_broadcast::server::Server::new();
             server.run(server_rx);
@@ -43,7 +45,6 @@ fn main() {
 
     let tx_db2 = tx_db.clone();
     tokio_runtime.block_on(async {
-
 
         let tx_db3 = tx_db2.clone();
         tokio::spawn(async move {
@@ -81,14 +82,6 @@ fn main() {
 
         });
 
-
-
-
-
-
-
-
-
         tracing::info!("[main] web server starting on http://127.0.0.1:8080");
         match http_server::run(tx_db2).await{
             Ok(_) => tracing::debug!("[main] web server started on http://127.0.0.1:8080"),
@@ -97,7 +90,7 @@ fn main() {
     });
 
     h.join().unwrap();
-    // loop {};
+
 }
 
 

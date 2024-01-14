@@ -1,41 +1,21 @@
 //! ws_inbound
 
+#[allow(dead_code)]
+
 use crate::coinbase::Coinbase;
 use crossbeam::channel::Sender;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::fmt::Debug;
 use std::net::TcpStream;
-use std::thread::JoinHandle;
 use strum::IntoEnumIterator;
 use tungstenite::stream::MaybeTlsStream;
-use tungstenite::{connect, Message, WebSocket};
-use url::Url;
+use tungstenite::{Message, WebSocket};
 use common_lib::{Msg, ProductId};
 
-/// Start a new thread listening to the coinbase websocket
-pub fn run(tx_db: crossbeam::channel::Sender<Msg>) -> JoinHandle<()> {
-    tracing::debug!("[run] spawning websocket...");
-    std::thread::spawn(move || {
-        let _ws = ws_connect(tx_db);
-    })
-}
-
-/// The new thread listening to the coinbase websocket
-pub fn ws_connect(tx_db: Sender<Msg>) -> Result<(), Box<dyn Error>> {
-    // https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html
-    let url = std::env::var("COINBASE_URL").unwrap_or_else(|_| "wss://ws-feed.pro.coinbase.com".to_string());
-    tracing::debug!("[websocket_go] url: {}", &url);
-    #[allow(unused_mut)]
-    let (mut socket, _) = connect(Url::parse(&url)?)?;
-    ws_process(socket, tx_db);
-    Ok(())
-}
-
 /// Todo: make websocket post-processing asynchronous
-fn ws_process(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
+pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
     // subscribe to coinbase.rs socket for heartbeat and tickers
-    let _ = ws.send(Message::Text(generate_websocket_subscribe_json().to_string()));
+    let _ = ws.send(Message::Text(subscribe().to_string()));
 
     // parse incoming
     loop {
@@ -124,7 +104,7 @@ pub struct Subscribe {
 }
 
 /// here's where we subscribe to all the possible products (BTC-USD, ETH-USC, ETH-BTC
-fn generate_websocket_subscribe_json() -> serde_json::Value {
+fn subscribe() -> serde_json::Value {
 
     let prod_ids = ProductId::iter().map(|x|{x.to_string_coinbase()}).collect();
 
