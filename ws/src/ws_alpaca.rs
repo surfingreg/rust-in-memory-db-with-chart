@@ -5,11 +5,9 @@
 //! ref: https://docs.alpaca.markets/docs/real-time-crypto-pricing-data
 //!
 use std::net::TcpStream;
-use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use crossbeam::channel::Sender;
 use serde::{Deserialize, Serialize};
-use serde::de::Error;
 use serde_json::json;
 use tungstenite::{Message, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
@@ -180,7 +178,7 @@ pub struct AlpacaBar {
     pub dtg: DateTime<Utc>,
 }
 
-pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
+pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<Msg>) {
 
     let _ = ws.send(Message::Text(subscribe().to_string()));
 
@@ -238,7 +236,7 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
                                 },
 
                                 DataMessage::Trade(trade)=>{
-                                    tracing::debug!("[parse][trade] {}", &t_msg);
+                                    tracing::error!("[parse][trade] {:?}", &trade);
                                     // let _ = tx_db.send(DbMsg::TradeAlpaca(trade.to_owned()));
                                 },
                                 DataMessage::Bar(b)=>{
