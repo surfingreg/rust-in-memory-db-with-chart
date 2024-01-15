@@ -166,13 +166,13 @@ pub struct AlpacaBar {
     pub close: f64,
 
     #[serde(rename = "v")]
-    pub bar_v: f64,
+    pub volume: f64,
 
     #[serde(rename = "vw")]
     pub bar_vw: f64,
 
     #[serde(rename = "n")]
-    pub bar_n: f64,
+    pub num_trades: f64,
 
     #[serde(rename = "t")]
     pub dtg: DateTime<Utc>,
