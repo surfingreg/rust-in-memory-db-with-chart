@@ -4,7 +4,8 @@ use std::error::Error;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
-use common_lib::{ChartDataset, UniversalError, Msg, ProductId};
+use common_lib::{ChartDataset, UniversalError, DbMsg, ProductId};
+use common_lib::cb_ticker::TickerSource;
 use common_lib::init::init;
 use db::arrow_db;
 use visual::http_server;
@@ -27,11 +28,13 @@ fn main() {
     // database thread
     let tx_db = arrow_db::run(tokio_runtime.handle().clone());
 
+    let mut handles = vec!();
+
     // coinbase websocket thread
-    // let h = ws::connect::run(ConnectSource::Coinbase, tx_db.clone());
+    handles.push(ws::connect::run(ConnectSource::Coinbase, tx_db.clone()));
 
     // alpaca websocket thread
-    let h = ws::connect::run(ConnectSource::Alpaca, tx_db.clone());
+    handles.push(ws::connect::run(ConnectSource::Alpaca, tx_db.clone()));
 
     // outbound websocket
     let (server_tx, server_rx) = crossbeam_channel::unbounded::<ws_broadcast::command::Cmd>();
@@ -89,7 +92,9 @@ fn main() {
         }
     });
 
-    h.join().unwrap();
+    for h in handles {
+        h.join().unwrap();
+    }
 
 }
 
@@ -119,9 +124,11 @@ fn _get_most_recent_date(chart_data: Vec<ChartDataset>) -> DateTime<Utc> {
 }
 
 /// duplicated from visual
-async fn request_chart_multi_data_since(tx_db: crossbeam_channel::Sender<Msg>, since: DateTime<Utc>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
+///
+/// TODO: currently coinbase-specific
+async fn request_chart_multi_data_since(tx_db: crossbeam_channel::Sender<DbMsg>, since: DateTime<Utc>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
-    match tx_db.send(Msg::RqstChartMultiSince {sender, filter_prod_id: vec![ProductId::BtcUsd], since}) {
+    match tx_db.send(DbMsg::RqstChartMultiSince { ticker_source: TickerSource::Coinbase, sender, filter_prod_id: vec![ProductId::BtcUsd], since}) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)

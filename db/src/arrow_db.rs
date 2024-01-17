@@ -8,7 +8,8 @@ use common_lib::heartbeat::start_heartbeat;
 use crossbeam_channel::{unbounded, Sender};
 use std::sync::Arc;
 use tokio::runtime::Handle;
-use common_lib::{UniversalError, Msg};
+use common_lib::{UniversalError, DbMsg};
+use common_lib::cb_ticker::TickerSource;
 use crate::calculation::refresh_calculations;
 use crate::event_book::EventBook;
 
@@ -16,7 +17,7 @@ pub const BOOK_NAME_COINBASE:&str="coinbase";
 pub const LIMIT_RETURN_SIZE:usize = 1000;
 
 /// spawn a thread to listen for messages; return the channel to communicate to this thread
-pub fn run(tr: Handle) -> Sender<Msg> {
+pub fn run(tr: Handle) -> Sender<DbMsg> {
     tracing::debug!("[run]");
     let (tx, rx) = unbounded();
     let event_book = Arc::new(EventBook::new());
@@ -32,7 +33,7 @@ pub fn run(tr: Handle) -> Sender<Msg> {
                     let evt_book = event_book.clone();
 
                     // new thread to prevent processing blocking the websocket
-                    if let Err(e) = process_message(message, &evt_book, tr.clone()){
+                    if let Err(e) = receive(message, &evt_book, tr.clone()){
                         tracing::info!("[run] message error: {:?}", e);
                     }
                 }
@@ -43,29 +44,42 @@ pub fn run(tr: Handle) -> Sender<Msg> {
     tx
 }
 
-fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(), UniversalError>  {
+fn receive(message: DbMsg, evt_book: &EventBook, tr: Handle) -> Result<(), UniversalError>  {
 
-    // tracing::debug!("[db::process_message] msg:{:?}", &message);
+    // tracing::debug!("[db::receive] msg:{:?}", &message);
 
     match message {
 
-        Msg::Ping => {
+        DbMsg::Ping => {
             tracing::debug!("[db] PING");
             Ok(())
         },
 
-        Msg::Save(ticker) => {
-            // save_ticker(&ticker, evt_book);
-            let _ = evt_book.push_log(BOOK_NAME_COINBASE, &ticker);
-            if let Err(e) = refresh_calculations(BOOK_NAME_COINBASE, evt_book, ticker.product_id) {
-                tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
+        DbMsg::Insert(ticker_type, ticker) => {
+
+            match ticker_type{
+                TickerSource::Coinbase => {
+                    let _ = evt_book.push_log(TickerSource::Coinbase, &ticker);
+                    if let Err(e) = refresh_calculations(TickerSource::Coinbase, evt_book, ticker.product_id) {
+                        tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
+                    }
+                    Ok(())
+                }
+                TickerSource::Alpaca => {
+                    let _ = evt_book.push_log(TickerSource::Alpaca, &ticker);
+                    if let Err(e) = refresh_calculations(TickerSource::Alpaca, evt_book, ticker.product_id) {
+                        tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
+                    }
+                    Ok(())
+                }
             }
-            Ok(())
+
+
         },
 
-        Msg::RqstChartMulti {sender, filter_prod_id} => {
+        DbMsg::RqstChartMulti {ticker_source, sender, filter_prod_id} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
-            let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
+            let chart = match evt_book_read_lock.get(&ticker_source){
                 Some(evt_log)=>{
                     tr.block_on(async{
                         evt_log.get_data_for_multi_line_chart(filter_prod_id, None, LIMIT_RETURN_SIZE).await
@@ -84,9 +98,9 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
             }
         },
 
-        Msg::RqstChartMultiSince {sender, filter_prod_id, since} => {
+        DbMsg::RqstChartMultiSince {ticker_source, sender, filter_prod_id, since} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
-            let chart = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
+            let chart = match evt_book_read_lock.get(&ticker_source){
                 Some(evt_log)=>{
                     tr.block_on(async{
                         evt_log.get_data_for_multi_line_chart(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
@@ -106,9 +120,9 @@ fn process_message(message: Msg, evt_book: &EventBook, tr: Handle) -> Result<(),
         },
 
         // send a DataFrame back with 'select * from ..."
-        Msg::RqstRaw {sender}=>{
+        DbMsg::RqstRaw {ticker_source, sender}=>{
             let evt_book_read_lock = evt_book.book.read().unwrap();
-            let df = match evt_book_read_lock.get(BOOK_NAME_COINBASE){
+            let df = match evt_book_read_lock.get(&ticker_source){
                 Some(evt_log)=>{
                     let df_result = tr.block_on(async{
                         evt_log.query_sql_for_chart().await

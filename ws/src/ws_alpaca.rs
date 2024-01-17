@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tungstenite::{Message, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
-use common_lib::{Msg};
+use common_lib::{DbMsg};
 
 // /// fn<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>
 // /// https://serde.rs/field-attrs.html
@@ -85,13 +85,8 @@ pub struct DataMesgSubscriptionListCrypto {
     pub bars:Vec<String>,
     #[serde(rename="updatedBars")]
     pub updated_bars:Vec<String>,
-    // #[serde(rename="cancelErrors")]
-    // pub cancel_errors:Vec<String>,
-    // pub corrections:Vec<String>,
     #[serde(rename="dailyBars")]
     pub daily_bars:Vec<String>,
-    // pub statuses:Vec<String>,
-    // pub lulds:Vec<String>,
 }
 
 ///
@@ -103,22 +98,16 @@ pub struct DataMesgSubscriptionListCrypto {
 ///
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlpacaTrade {
-
     #[serde(rename = "S")]
     pub symbol: String,
-
     #[serde(rename = "i")]
     pub id_trade: u64,
-
     #[serde(rename = "p")]
     pub price: f64,
-
     #[serde(rename = "s")]
     pub size: f64,
-
     #[serde(rename = "t")]
     pub dtg: DateTime<Utc>,
-
     pub tks: String,
 
 }
@@ -126,22 +115,16 @@ pub struct AlpacaTrade {
 /// [{"T":"q","S":"BTC/USD","bp":42135.56,"bs":0.27779,"ap":42176.435,"as":0.550171,"t":"2024-01-14T23:06:25.205996645Z"}]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlpacaQuote {
-
     #[serde(rename = "S")]
     pub symbol: String,
-
     #[serde(rename = "bp")]
     pub quote_bp: f64,
-
     #[serde(rename = "bs")]
     pub quote_bs: f64,
-
     #[serde(rename = "ap")]
     pub quote_ap: f64,
-
     #[serde(rename = "as")]
     pub quote_as: f64,
-
     #[serde(rename = "t")]
     pub dtg: DateTime<Utc>,
 }
@@ -149,44 +132,36 @@ pub struct AlpacaQuote {
 /// [{"T":"b","S":"BTC/USD","o":42006.2005,"h":42051.4725,"l":42006.2005,"c":42051.4725,"v":0,"t":"2024-01-14T23:30:00Z","n":0,"vw":0}]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlpacaBar {
-
     #[serde(rename = "S")]
     pub symbol: String,
-
     #[serde(rename = "o")]
     pub open: f64,
-
     #[serde(rename = "h")]
     pub high: f64,
-
     #[serde(rename = "l")]
     pub low: f64,
-
     #[serde(rename = "c")]
     pub close: f64,
-
     #[serde(rename = "v")]
     pub volume: f64,
-
     #[serde(rename = "vw")]
     pub bar_vw: f64,
-
     #[serde(rename = "n")]
     pub num_trades: f64,
-
     #[serde(rename = "t")]
     pub dtg: DateTime<Utc>,
 }
 
-pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<Msg>) {
+pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<DbMsg>) {
 
-    let _ = ws.send(Message::Text(subscribe().to_string()));
+    let _ = ws.send(Message::Text(authenticate().to_string()));
 
     loop {
 
         let msg_result = ws.read();
 
         match msg_result {
+            Ok(Message::Ping(p)) => tracing::debug!("[parse][ping] {:?}", &p),
             Ok(Message::Text(t_msg)) => {
                 // tracing::debug!("[parse] txt: {}", &t_msg);
 
@@ -210,27 +185,10 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<Msg>) 
                                 // [{"T":"success","msg":"authenticated"}]
                                 DataMessage::Success(success_data)=>{
                                     match success_data{
-                                        DataMesgSuccess::Connected=>{
-                                            tracing::debug!("[parse] connected");
-                                        },
+                                        DataMesgSuccess::Connected=> tracing::debug!("[parse] connected"),
                                         DataMesgSuccess::Authenticated=>{
                                             tracing::debug!("[parse] authenticated");
-
-                                            // subscribe to stock feeds
-                                            // https://alpaca.markets/docs/api-references/market-data-api/stock-pricing-data/realtime/#subscribe
-
-                                            let symbols = vec!("BTC/USD".to_string());
-
-                                            let json = json!({
-                                                "action": RequestAction::Subscribe,
-                                                "trades": stock_list_to_uppercase(&symbols),
-                                                "quotes": stock_list_to_uppercase(&symbols),
-                                                "bars": stock_list_to_uppercase(&symbols),
-                                            });
-                                            tracing::debug!("[parse] sending subscription request...\n{}", &json);
-                                            let result = ws.send(Message::Text(json.to_string()));
-                                            tracing::info!("[parse] subscription request sent: {:?}", &result);
-
+                                            subscribe(&mut ws);
                                         },
                                     }
                                 },
@@ -240,12 +198,10 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<Msg>) 
                                     // let _ = tx_db.send(DbMsg::TradeAlpaca(trade.to_owned()));
                                 },
                                 DataMessage::Bar(b)=>{
-                                    tracing::debug!("[parse][bar] {:?}", &b);
+                                    tracing::error!("[parse][bar] {:?}", &b);
                                 },
                                 DataMessage::Quote(q)=>{
-
-                                    // [{"T":"q","S":"BTC/USD","bp":42226.056,"bs":0.27826,"ap":42256.5,"as":0.2754,"t":"2024-01-14T22:42:13.326734394Z"}]
-
+                                    // [{"T":"q","S":"BTC/USD","bp":42226.056,"bs":0.27826,"ap":42256.5,"as":0.2754,"t":"2024-01-14T22:42:13.326734394Z"}
                                     tracing::debug!("[parse][quote] {:?}", &q);
 
                                 },
@@ -292,7 +248,7 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<Msg>) 
 ///                    >  {"action": "listen", "data": {"streams": ["T.SPY"]}}
 ///                    < {"stream":"listening","data":{"streams":["T.SPY"]}}
 ///
-fn subscribe() -> serde_json::Value {
+fn authenticate() -> serde_json::Value {
     // {"action": "authenticate","data": {"key_id": "???", "secret_key": "???"}}
 
     // TODO: add database setting "use_paper_or_live_key"
@@ -307,4 +263,21 @@ fn subscribe() -> serde_json::Value {
 
     let j: serde_json::Value = serde_json::to_value(&json_obj).expect("[gen_subscribe_json] json serialize failed");
     j
+}
+
+/// subscribe to stock feeds
+/// https://alpaca.markets/docs/api-references/market-data-api/stock-pricing-data/realtime/#subscribe
+fn subscribe(ws: &mut WebSocket<MaybeTlsStream<TcpStream>>) {
+
+    let symbols = vec!("BTC/USD".to_string());
+
+    let json = json!({
+        "action": RequestAction::Subscribe,
+        "trades": stock_list_to_uppercase(&symbols),
+        "quotes": stock_list_to_uppercase(&symbols),
+        "bars": stock_list_to_uppercase(&symbols),
+    });
+    tracing::debug!("[subscribe] sending subscription request...\n{}", &json);
+    let result = ws.send(Message::Text(json.to_string()));
+    tracing::info!("[subscribe] subscription request sent: {:?}", &result);
 }

@@ -12,7 +12,7 @@ use serde_json::json;
 
 use tokio::try_join;
 use common_lib::init::ConfigLocation;
-use common_lib::Msg;
+use common_lib::DbMsg;
 use crate::handler_chart::{get_raw, present_chart_multi_line};
 
 
@@ -20,7 +20,7 @@ use crate::handler_chart::{get_raw, present_chart_multi_line};
 
 
 /// start actix in a new blocking thread
-pub async fn run(tx_operator2: Sender<Msg>) -> Result<(), std::io::Error> {
+pub async fn run(tx_operator2: Sender<DbMsg>) -> Result<(), std::io::Error> {
 
     // handlebars
     // refs:
@@ -104,7 +104,7 @@ pub async fn run(tx_operator2: Sender<Msg>) -> Result<(), std::io::Error> {
 // }
 
 /// show multiple datasets on the same chart, regardless of x-axis count
-pub async fn get_chart_ws(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+pub async fn get_chart_ws(_tx_db: web::Data<Sender<DbMsg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     // let tx_db = tx_db.into_inner().as_ref().clone();
 
     let data = json!({
@@ -120,7 +120,7 @@ pub async fn get_chart_ws(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handleba
 }
 
 /// show multiple datasets on the same chart, regardless of x-axis count
-pub async fn get_chart_ws_old(_tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+pub async fn get_chart_ws_old(_tx_db: web::Data<Sender<DbMsg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     // let tx_db = tx_db.into_inner().as_ref().clone();
 
     let data = json!({

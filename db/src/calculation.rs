@@ -4,13 +4,12 @@
 
 use std::time::Instant;
 use common_lib::{CalculationId, ProductId};
-use common_lib::cb_ticker::TickerCalc;
-use crate::arrow_db::BOOK_NAME_COINBASE;
+use common_lib::cb_ticker::{TickerCalc, TickerSource};
 use crate::event_book::EventBook;
 use crate::event_log::{EventLog, EventLogError};
 
 /// read lock
-pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId) ->Result<(), EventLogError> {
+pub fn refresh_calculations(ticker_src: TickerSource, evt_book: &EventBook, prod_id: ProductId) ->Result<(), EventLogError> {
 
     tracing::debug!("[refresh_calculations]");
     let start = Instant::now();
@@ -18,7 +17,7 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
 
     {
         let evt_book_read_lock = evt_book.book.read().unwrap();
-        let evt_log: &EventLog = evt_book_read_lock.get(key).unwrap();
+        let evt_log: &EventLog = evt_book_read_lock.get(&ticker_src).unwrap();
 
         // moving averages
         let ma_0010 = evt_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &prod_id)?;
@@ -55,7 +54,7 @@ pub fn refresh_calculations(key: &str, evt_book: &EventBook, prod_id: ProductId)
 
     // write lock...
     for c in temp.iter() {
-        let _ = evt_book.push_calc(BOOK_NAME_COINBASE, &c);
+        let _ = evt_book.push_calc(&ticker_src, &c);
     }
 
     tracing::debug!("[update_moving_averages] {:?}ms", start.elapsed().as_micros() as f64 / 1000.0);

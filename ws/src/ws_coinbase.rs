@@ -10,10 +10,11 @@ use std::net::TcpStream;
 use strum::IntoEnumIterator;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message, WebSocket};
-use common_lib::{Msg, ProductId};
+use common_lib::{DbMsg, ProductId};
+use common_lib::cb_ticker::TickerSource;
 
 /// Todo: make websocket post-processing asynchronous
-pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
+pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<DbMsg>) {
     // subscribe to coinbase.rs socket for heartbeat and tickers
     let _ = ws.send(Message::Text(subscribe().to_string()));
 
@@ -33,7 +34,7 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<Msg>) {
                         match json {
                             Coinbase::Subscriptions(s) => tracing::debug!("[Coinbase::Subscriptions] {:?}", & s),
                             Coinbase::Ticker(t) => {
-                                if let Err(e) = tx_db.send(Msg::Save(t)) {
+                                if let Err(e) = tx_db.send(DbMsg::Insert(TickerSource::Coinbase, t)) {
                                     tracing::error!("[ws_process] send error: {:?}", & e);
                                 }
                             }

@@ -6,7 +6,7 @@ pub mod ws_alpaca;
 
 pub mod connect {
 
-    use common_lib::{Msg};
+    use common_lib::{DbMsg};
     use std::error::Error;
     use std::thread::JoinHandle;
     use crossbeam::channel::Sender;
@@ -24,7 +24,7 @@ pub mod connect {
     }
 
     /// Start a new thread listening to the coinbase websocket
-    pub fn run(source: ConnectSource, tx_db: Sender<Msg>) -> JoinHandle<()> {
+    pub fn run(source: ConnectSource, tx_db: Sender<DbMsg>) -> JoinHandle<()> {
         tracing::debug!("[run] spawning websocket...");
         std::thread::spawn(move || {
             let _ws = ws_connect(source, tx_db);
@@ -33,7 +33,7 @@ pub mod connect {
 
 
     /// connect to alpaca or coinbase websocket
-    pub fn ws_connect(source: ConnectSource, tx_db: Sender<Msg>) -> Result<(), Box<dyn Error>> {
+    pub fn ws_connect(source: ConnectSource, tx_db: Sender<DbMsg>) -> Result<(), Box<dyn Error>> {
         // https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html
         let url = match source {
             ConnectSource::Alpaca => {

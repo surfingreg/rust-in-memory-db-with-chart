@@ -9,7 +9,7 @@ use datafusion::dataframe::DataFrame;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
 use tokio::sync::oneshot;
-use crate::cb_ticker::Ticker;
+use crate::cb_ticker::{Ticker, TickerSource};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartDataset {
@@ -38,22 +38,23 @@ impl std::error::Error for UniversalError {
 }
 
 #[derive(Debug, Display)]
-pub enum Msg {
-    // Post(T),
-    Save(Ticker),
-    // PostAndLog(T),
+pub enum DbMsg {
+    Insert(TickerSource, Ticker),
     Ping,
     Pong,
     Start,
     Stop,
-    RqstChartMulti {sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId> },
-    RqstChartMultiSince {sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId>, since:DateTime<Utc> },
-    RqstRaw {sender: oneshot::Sender<DataFrame> },
+    RqstChartMulti {ticker_source:TickerSource, sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId> },
+    RqstChartMultiSince {ticker_source:TickerSource, sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId>, since:DateTime<Utc> },
+    RqstRaw {ticker_source:TickerSource, sender: oneshot::Sender<DataFrame> },
 
     // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
     // RequestChartRust{sender: oneshot::Sender<Chart> },
 
 }
+
+
+
 
 #[derive(Debug)]
 pub enum ChartType{

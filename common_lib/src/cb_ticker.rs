@@ -31,22 +31,11 @@ pub struct TickerCalc {
 
 }
 
-// impl TickerCalc {
-//     pub fn slope(&self)->Option<f64> {
-//         if self.period_price_diff.is_some() && self.period_time_diff.is_some() {
-//             Some(self.period_price_diff.unwrap() / self.period_time_diff.unwrap())
-//         } else {
-//             None
-//         }
-//     }
-// }
-
-
-
-
-
-
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TickerSource {
+    Coinbase,
+    Alpaca,
+}
 
 /// fn<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>
 /// https://serde.rs/field-attrs.html

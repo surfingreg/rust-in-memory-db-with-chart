@@ -7,14 +7,14 @@ use crossbeam_channel::Sender;
 use handlebars::Handlebars;
 use serde_json::json;
 use tokio::sync::oneshot;
-use common_lib::{ChartDataset, UniversalError, Msg, ProductId};
+use common_lib::{ChartDataset, UniversalError, DbMsg, ProductId};
 
 const CHART_MULTI_NAME:&str = "chart_multi";
 
 /**************** HTTP handlers ********************************************************************/
 
 /// GET '/raw'
-pub async fn get_raw(tx: web::Data<Sender<Msg>>) -> impl Responder {
+pub async fn get_raw(tx: web::Data<Sender<DbMsg>>) -> impl Responder {
     request_raw_data(tx).await
 }
 
@@ -30,7 +30,7 @@ pub async fn redirect_home() -> HttpResponse {
 }
 
 /// show multiple datasets on the same chart, regardless of x-axis count
-pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
+pub async fn present_chart_multi_line(tx_db: web::Data<Sender<DbMsg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     // tracing::debug!("[present_chart]");
     let tx_db = tx_db.into_inner().as_ref().clone();
 
@@ -71,7 +71,7 @@ pub async fn present_chart_multi_line(tx_db: web::Data<Sender<Msg>>, hb: web::Da
 /// TODO: add an enum for the kind of chart to fetch
 ///
 /// TODO: Currently selects ALL product_id
-async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
+async fn request_chart_multi_data(tx_db: Sender<DbMsg>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
 
     use strum::IntoEnumIterator;
@@ -79,7 +79,7 @@ async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset
 
     // send a list of product IDs we want to filter on; here it's 'select *'
 
-    match tx_db.send(Msg::RqstChartMulti {sender, filter_prod_id: prods }) {
+    match tx_db.send(DbMsg::RqstChartMulti {ticker_source: TickerSource::Coinbase, sender, filter_prod_id: prods }) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)
@@ -91,12 +91,15 @@ async fn request_chart_multi_data(tx_db: Sender<Msg>) -> Result<Vec<ChartDataset
 
 use datafusion::arrow::util::pretty::pretty_format_batches;
 use datafusion::dataframe::DataFrame;
+use common_lib::cb_ticker::TickerSource;
 
 /// clear the mechanics of sending a cross-thread message out of the HTTP handler
-pub async fn request_raw_data(tx: web::Data<Sender<Msg>>) -> impl Responder{
+///
+/// TODO: handle multiple ticker sources
+pub async fn request_raw_data(tx: web::Data<Sender<DbMsg>>) -> impl Responder{
     let (tx_web, rx_web) = tokio::sync::oneshot::channel::<DataFrame>();
 
-    match tx.send(Msg::RqstRaw { sender: tx_web}) {
+    match tx.send(DbMsg::RqstRaw {ticker_source:TickerSource::Coinbase, sender: tx_web}) {
         Ok(_) => match rx_web.await {
             Ok(df) => {
                 pretty_format_batches(&df.collect().await.unwrap())

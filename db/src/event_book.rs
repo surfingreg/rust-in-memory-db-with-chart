@@ -2,13 +2,12 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use common_lib::cb_ticker::{Ticker, TickerCalc};
+use common_lib::cb_ticker::{Ticker, TickerCalc, TickerSource};
 use crate::event_log::EventLog;
-
 
 /// Container for multiple event logs keyed by a string
 pub struct EventBook {
-    pub book: Arc<RwLock<HashMap<String, EventLog>>>,
+    pub book: Arc<RwLock<HashMap<TickerSource, EventLog>>>,
 }
 impl Default for EventBook {
     fn default() -> Self {
@@ -16,19 +15,20 @@ impl Default for EventBook {
     }
 }
 
+/// todo generalize key
 impl EventBook {
     pub fn new() -> EventBook {
         EventBook {
-            book: Arc::new(RwLock::new(HashMap::<String, EventLog>::new())),
+            book: Arc::new(RwLock::new(HashMap::<TickerSource, EventLog>::new())),
         }
     }
 
     /// get write lock on the entire book and insert a new record
-    pub fn push_log(&self, key: &str, val: &Ticker) -> Result<(), BookError> {
+    pub fn push_log(&self, key: TickerSource, val: &Ticker) -> Result<(), BookError> {
         // write lock
         let mut book_writable = self.book.write().unwrap();
 
-        match book_writable.get_mut(key) {
+        match book_writable.get_mut(&key) {
             Some(event_log) => {
                 // an event log exists for this key
 
@@ -47,7 +47,7 @@ impl EventBook {
                     Ok(_) => {
                         // 3. put the new event log with new ticker in the hashmap
                         // Option<previous> or none returned
-                        book_writable.insert(key.to_string(), new_e_log);
+                        book_writable.insert(key, new_e_log);
                         Ok(())
                     }
                     Err(e) => {
@@ -60,14 +60,14 @@ impl EventBook {
     }
 
     /// get write lock on the entire book and insert a new record
-    pub fn push_calc(&self, key: &str, val: &TickerCalc) -> Result<(), BookError> {
+    pub fn push_calc(&self, ticker_src:&TickerSource, val: &TickerCalc) -> Result<(), BookError> {
         // tracing::debug!("[push_calc]");
 
         // write lock
         let mut book_writable = self.book.write().unwrap();
 
         // tracing::debug!("[push_calc] got write lock");
-        match book_writable.get_mut(key) {
+        match book_writable.get_mut(ticker_src) {
             Some(calc_log) => {
                 // an event log exists for this key
                 // TODO un-unwrap
@@ -86,7 +86,7 @@ impl EventBook {
                     Ok(_) => {
                         // 3. put the new event log with new ticker in the hashmap
                         // Option<previous> or none returned
-                        book_writable.insert(key.to_string(), new_e_log);
+                        book_writable.insert(ticker_src.clone(), new_e_log);
                         Ok(())
                     }
                     Err(e) => {
@@ -96,7 +96,6 @@ impl EventBook {
                 }
             }
         }
-
     }
 }
 
