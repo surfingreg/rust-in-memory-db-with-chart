@@ -11,17 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tungstenite::{Message, WebSocket};
 use tungstenite::stream::MaybeTlsStream;
-use common_lib::{DbMsg};
-
-// /// fn<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>
-// /// https://serde.rs/field-attrs.html
-// /// https://stackoverflow.com/questions/46753955/how-to-transform-fields-during-deserialization-using-serde
-// fn f64_from_str<'de, D>(deserializer: D) -> Result<f64, D::Error>
-//     where D: serde::Deserializer<'de>,
-// {
-//     let s: &str = serde::Deserialize::deserialize(deserializer)?;
-//     f64::from_str(&s).map_err(D::Error::custom)
-// }
+use common_lib::{DbMsg, SymbolCommon, TickerCommon};
+use common_lib::cb_ticker::{Datasource};
 
 fn stock_list_to_uppercase(lower_stock: &Vec<String>) -> Vec<String> {
     lower_stock.iter().map(|x| x.to_uppercase()).collect()
@@ -47,7 +38,7 @@ pub enum RequestAction {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "T")]
-pub enum DataMessage{
+pub enum AlpacaPacket {
     Success(DataMesgSuccess),
     Subscription(DataMesgSubscriptionListCrypto),
     #[serde(rename = "t")]
@@ -99,7 +90,7 @@ pub struct DataMesgSubscriptionListCrypto {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlpacaTrade {
     #[serde(rename = "S")]
-    pub symbol: String,
+    pub symbol: AlpacaSymbol,
     #[serde(rename = "i")]
     pub id_trade: u64,
     #[serde(rename = "p")]
@@ -112,11 +103,24 @@ pub struct AlpacaTrade {
 
 }
 
-/// [{"T":"q","S":"BTC/USD","bp":42135.56,"bs":0.27779,"ap":42176.435,"as":0.550171,"t":"2024-01-14T23:06:25.205996645Z"}]
 #[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum AlpacaSymbol {
+    #[serde(alias="BTC/USD")]
+    BtcUsd
+}
+
+impl AlpacaSymbol {
+    pub fn to_common(&self) -> SymbolCommon {
+        SymbolCommon::BtcUsd
+    }
+}
+
+/// [{"T":"q","S":"BTC/USD","bp":42135.56,"bs":0.27779,"ap":42176.435,"as":0.550171,"t":"2024-01-14T23:06:25.205996645Z"}]
+/// TODO: there's no documentation defining what these fields signify
+#[derive(Deserialize, Debug, Clone)]
 pub struct AlpacaQuote {
     #[serde(rename = "S")]
-    pub symbol: String,
+    pub symbol: AlpacaSymbol,
     #[serde(rename = "bp")]
     pub quote_bp: f64,
     #[serde(rename = "bs")]
@@ -129,11 +133,22 @@ pub struct AlpacaQuote {
     pub dtg: DateTime<Utc>,
 }
 
+impl AlpacaQuote {
+    fn to_common(&self) -> TickerCommon {
+        TickerCommon{
+            source: Datasource::Alpaca,
+            symbol: self.symbol.to_common(),
+            price: self.quote_bp,
+            dtg: self.dtg,
+        }
+    }
+}
+
 /// [{"T":"b","S":"BTC/USD","o":42006.2005,"h":42051.4725,"l":42006.2005,"c":42051.4725,"v":0,"t":"2024-01-14T23:30:00Z","n":0,"vw":0}]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AlpacaBar {
     #[serde(rename = "S")]
-    pub symbol: String,
+    pub symbol: AlpacaSymbol,
     #[serde(rename = "o")]
     pub open: f64,
     #[serde(rename = "h")]
@@ -153,13 +168,9 @@ pub struct AlpacaBar {
 }
 
 pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<DbMsg>) {
-
     let _ = ws.send(Message::Text(authenticate().to_string()));
-
     loop {
-
         let msg_result = ws.read();
-
         match msg_result {
             Ok(Message::Ping(p)) => tracing::debug!("[parse][ping] {:?}", &p),
             Ok(Message::Text(t_msg)) => {
@@ -167,14 +178,14 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<DbMsg>
 
                 /*
 
-                2024-01-14T21:56:35.710485Z DEBUG ws::ws_alpaca: [parse] txt: [{"T":"success","msg":"connected"}]
-                2024-01-14T21:56:35.815223Z DEBUG ws::ws_alpaca: [parse] txt: [{"T":"error","code":402,"msg":"auth failed"}]
+                2024-01-14T21:56:35.710485Z DEBUG ws_client::ws_alpaca: [parse] txt: [{"T":"success","msg":"connected"}]
+                2024-01-14T21:56:35.815223Z DEBUG ws_client::ws_alpaca: [parse] txt: [{"T":"error","code":402,"msg":"auth failed"}]
                 or
-                2024-01-14T22:02:24.336270Z DEBUG ws::ws_alpaca: [parse] txt: [{"T":"success","msg":"authenticated"}]
+                2024-01-14T22:02:24.336270Z DEBUG ws_client::ws_alpaca: [parse] txt: [{"T":"success","msg":"authenticated"}]
 
                  */
 
-                let json_vec = serde_json::from_str::<Vec<DataMessage>>(&t_msg);
+                let json_vec = serde_json::from_str::<Vec<AlpacaPacket>>(&t_msg);
 
                 match json_vec {
                     Ok(data_vec)=>{
@@ -183,7 +194,7 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<DbMsg>
 
                                 // [{"T":"success","msg":"connected"}]
                                 // [{"T":"success","msg":"authenticated"}]
-                                DataMessage::Success(success_data)=>{
+                                AlpacaPacket::Success(success_data)=>{
                                     match success_data{
                                         DataMesgSuccess::Connected=> tracing::debug!("[parse] connected"),
                                         DataMesgSuccess::Authenticated=>{
@@ -193,22 +204,24 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, _tx_db: Sender<DbMsg>
                                     }
                                 },
 
-                                DataMessage::Trade(trade)=>{
+                                AlpacaPacket::Trade(trade)=>{
                                     tracing::error!("[parse][trade] {:?}", &trade);
                                     // let _ = tx_db.send(DbMsg::TradeAlpaca(trade.to_owned()));
                                 },
-                                DataMessage::Bar(b)=>{
+                                AlpacaPacket::Bar(b)=>{
                                     tracing::error!("[parse][bar] {:?}", &b);
                                 },
-                                DataMessage::Quote(q)=>{
+                                AlpacaPacket::Quote(q)=>{
+                                    // There is nearly zero trade volume on Alpaca so for the sake of having something to look at
+                                    // on a chart use Quotes instead of actual trade data.
                                     // [{"T":"q","S":"BTC/USD","bp":42226.056,"bs":0.27826,"ap":42256.5,"as":0.2754,"t":"2024-01-14T22:42:13.326734394Z"}
                                     tracing::debug!("[parse][quote] {:?}", &q);
-
+                                    let _ = _tx_db.send(DbMsg::Insert(Datasource::Alpaca, q.to_common()));
                                 },
                                 // DataMessage::DailyBar=>{},
                                 // DataMessage::Status=>{},
-                                DataMessage::Subscription(list) => tracing::info!("[parse][text][subscription] {:?}", &list),
-                                DataMessage::Error => tracing::error!("[parse][text][error] error: {:?}", &data),
+                                AlpacaPacket::Subscription(list) => tracing::info!("[parse][text][subscription] {:?}", &list),
+                                AlpacaPacket::Error => tracing::error!("[parse][text][error] error: {:?}", &data),
                                 _ => {
                                     tracing::debug!("[parse] txt: {}", &t_msg);
                                 }

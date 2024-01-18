@@ -66,11 +66,11 @@ impl Client {
         let t1 = tcp_stream.clone();
 
         let (socket, response) = client_with_config(
-            url::Url::parse("ws://localhost:3012/socket").unwrap(),
+            url::Url::parse("ws_client://localhost:3012/socket").unwrap(),
             MaybeTlsStream::Plain(t1.try_clone().unwrap()),
             None
         ).unwrap();
-        // let (socket, response) = connect(url::Url::parse("ws://localhost:3012/socket").unwrap()).expect("Can't connect");
+        // let (socket, response) = connect(url::Url::parse("ws_client://localhost:3012/socket").unwrap()).expect("Can't connect");
 
         // set non-blocking after handshake...it matters
         tcp_stream.set_nonblocking(true).expect("set_nonblocking call failed");
@@ -195,7 +195,7 @@ impl Client {
             // lock websocket
             {
                 let mut unlocked_socket = ws_arc.lock().expect("[client] ping loop couldn't unlock");
-                // tracing::debug!("[client] ws locked, sending count");
+                // tracing::debug!("[client] ws_client locked, sending count");
 
                 match unlocked_socket.send(Message::Ping(vec![])){
                     // match unlocked_socket.send(Message::Text(format!("client count: {}", i))) {

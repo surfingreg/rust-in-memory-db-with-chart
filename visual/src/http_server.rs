@@ -13,11 +13,7 @@ use serde_json::json;
 use tokio::try_join;
 use common_lib::init::ConfigLocation;
 use common_lib::DbMsg;
-use crate::handler_chart::{get_raw, present_chart_multi_line};
-
-
-
-
+use crate::handler_chart::{present_raw_data, present_chart_multi_line_static};
 
 /// start actix in a new blocking thread
 pub async fn run(tx_operator2: Sender<DbMsg>) -> Result<(), std::io::Error> {
@@ -76,15 +72,17 @@ pub async fn run(tx_operator2: Sender<DbMsg>) -> Result<(), std::io::Error> {
 
     let tx_operator = web::Data::new(tx_operator2.clone());
 
+
+    // note: the websocket is handled entirely outside actix, by tungstenite
     let http_server = HttpServer::new(move || {
         App::new()
             .app_data(tx_operator.clone())
             .app_data(handlebars_ref.clone())
-            .route("/", web::get().to(present_chart_multi_line))
-            .route("/js/chart.js", web::get().to(get_chart_js))
-            .route("/js/chartjs-adapter-date-fns.js", web::get().to(get_chart_js_date))
-            .route("/raw", web::get().to(get_raw))
-            .route("/chart_ws", web::get().to(get_chart_ws))
+            .route("/", web::get().to(present_chart_multi_line_static))
+            .route("/js/chart.js", web::get().to(get_file_chart_js))
+            .route("/js/chartjs-adapter-date-fns.js", web::get().to(get_file_chart_js_date))
+            .route("/raw", web::get().to(present_raw_data))
+            .route("/chart_ws", web::get().to(present_chart_dynamic))
 
     })
     // .bind_rustls(("127.0.0.1", 8443), config)?
@@ -98,59 +96,23 @@ pub async fn run(tx_operator2: Sender<DbMsg>) -> Result<(), std::io::Error> {
 }
 
 
-
-// pub async fn get_chart_ws() -> impl Responder {
-//     NamedFile::open_async("visual/static/templates/chart_ws.html").await.unwrap()
-// }
-
 /// show multiple datasets on the same chart, regardless of x-axis count
-pub async fn get_chart_ws(_tx_db: web::Data<Sender<DbMsg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
-    // let tx_db = tx_db.into_inner().as_ref().clone();
-
+/// websocket does the data loading
+pub async fn present_chart_dynamic(_tx_db: web::Data<Sender<DbMsg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
     let data = json!({
         "title": "chart_ws",
         "parent": "base0",
         "is_logged_in": true,
         "chart_title": "Coinbase",
-        // "data_vec": data_vec_json,
     });
     let body = hb.render("chart_ws", &data).unwrap();
     HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
 
 }
 
-/// show multiple datasets on the same chart, regardless of x-axis count
-pub async fn get_chart_ws_old(_tx_db: web::Data<Sender<DbMsg>>, hb: web::Data<Handlebars<'_>>/*, session: Session*/) -> HttpResponse {
-    // let tx_db = tx_db.into_inner().as_ref().clone();
-
-    let data = json!({
-        "title": "chart_ws",
-        "parent": "base0",
-        "is_logged_in": true,
-        "chart_title": "Coinbase",
-        // "data_vec": data_vec_json,
-    });
-    let body = hb.render("chart_ws_old", &data).unwrap();
-    HttpResponse::Ok().append_header(("cache-control", "no-store")).body(body)
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /// GET http://127.0.0.1:8080/js/chart.js
 /// https://www.chartjs.org/docs/latest/getting-started/installation.html
-async fn get_chart_js()-> impl Responder{
+async fn get_file_chart_js() -> impl Responder{
     // tracing::debug!("[get_chart_js]");
     let config_location:ConfigLocation = ConfigLocation::from_str(&std::env::var("CONFIG_LOCATION").unwrap_or_else(|_| "not_docker".to_owned())).expect("CONFIG_LOCATION");
 
@@ -159,35 +121,19 @@ async fn get_chart_js()-> impl Responder{
         // TODO: un-hard-code paths
         ConfigLocation::NotDocker => NamedFile::open_async("visual/static/js/chart.js").await
     }
-
 }
 
 /// GET http://127.0.0.1:8080/js/chart.js
 /// https://www.chartjs.org/docs/latest/getting-started/installation.html
 /// TODO: un-hard-code paths
-async fn get_chart_js_date()-> impl Responder{
+async fn get_file_chart_js_date() -> impl Responder{
     // tracing::debug!("[get_chart_js]");
     let config_location:ConfigLocation = ConfigLocation::from_str(&std::env::var("CONFIG_LOCATION").unwrap_or_else(|_| "not_docker".to_owned())).expect("CONFIG_LOCATION");
     match config_location{
         ConfigLocation::Docker => NamedFile::open_async("./static/js/chartjs-adapter-date-fns.js").await,
         ConfigLocation::NotDocker => NamedFile::open_async("visual/static/js/chartjs-adapter-date-fns.js").await
     }
-
 }
-
-// /// GET http://127.0.0.1:8080/js/chart.js
-// /// https://www.chartjs.org/docs/latest/getting-started/installation.html
-// async fn get_stocks_csv()-> impl Responder{
-//     // tracing::debug!("[get_chart_js]");
-//     let config_location:ConfigLocation = ConfigLocation::from_str(&std::env::var("CONFIG_LOCATION").unwrap_or_else(|_| "not_docker".to_owned())).expect("CONFIG_LOCATION");
-//
-//     match config_location{
-//         ConfigLocation::Docker => NamedFile::open_async("./static/js/chart.js").await,
-//         // TODO: un-hard-code paths
-//         ConfigLocation::NotDocker => NamedFile::open_async("visual/static/stocks.csv").await
-//     }
-// }
-
 
 fn _load_private_key(filename: &str) -> rustls::PrivateKey {
     let keyfile = fs::File::open(filename).expect("cannot open private key file");
@@ -202,7 +148,6 @@ fn _load_private_key(filename: &str) -> rustls::PrivateKey {
             _ => {}
         }
     }
-
     panic!("no keys found in {:?} (encrypted keys not supported)", filename);
 }
 
@@ -228,7 +173,6 @@ fn _load_ocsp(filename: &Option<String>) -> Vec<u8> {
 
     ret
 }
-
 
 #[cfg(test)]
 mod tests {

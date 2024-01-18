@@ -9,7 +9,26 @@ use datafusion::dataframe::DataFrame;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
 use tokio::sync::oneshot;
-use crate::cb_ticker::{Ticker, TickerSource};
+use crate::cb_ticker::{Datasource};
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct TickerCommon {
+    pub source: Datasource,
+    pub symbol: SymbolCommon,
+    pub price: f64,
+    pub dtg: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Display)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum SymbolCommon {
+    BtcUsd,
+    EthUsd,
+    EthBtc,
+
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChartDataset {
@@ -39,52 +58,25 @@ impl std::error::Error for UniversalError {
 
 #[derive(Debug, Display)]
 pub enum DbMsg {
-    Insert(TickerSource, Ticker),
+    Insert(Datasource, TickerCommon),
     Ping,
     Pong,
     Start,
     Stop,
-    RqstChartMulti {ticker_source:TickerSource, sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId> },
-    RqstChartMultiSince {ticker_source:TickerSource, sender: oneshot::Sender<Vec<ChartDataset>>, filter_prod_id:Vec<ProductId>, since:DateTime<Utc> },
-    RqstRaw {ticker_source:TickerSource, sender: oneshot::Sender<DataFrame> },
+    RqstChartMulti {sender: oneshot::Sender<Vec<ChartDataset>>, symbol:Vec<SymbolCommon> },
+    RqstChartSince {sender: oneshot::Sender<Vec<ChartDataset>>, symbol:Vec<SymbolCommon>, since:DateTime<Utc> },
+    RqstRaw {ticker_source: Datasource, sender: oneshot::Sender<DataFrame> },
 
     // RequestChartJson{chart_type: ChartType, sender: oneshot::Sender<serde_json::Value> },
     // RequestChartRust{sender: oneshot::Sender<Chart> },
 
 }
 
-
-
-
 #[derive(Debug)]
 pub enum ChartType{
     BasicAsJson,
     BasicAsRust,
     Test
-}
-
-
-#[derive(Debug, Deserialize, Display, Clone, EnumIter, PartialEq)]
-#[strum(serialize_all = "snake_case")]
-#[serde(rename_all = "snake_case")]
-pub enum ProductId {
-    #[serde(rename = "BTC-USD")]
-    BtcUsd,
-    #[serde(rename = "ETH-USD")]
-    EthUsd,
-    #[serde(rename = "ETH-BTC")]
-    EthBtc,
-
-}
-impl ProductId {
-    pub fn to_string_coinbase(&self) ->String{
-        match self{
-            ProductId::BtcUsd=>"BTC-USD".to_string(),
-            ProductId::EthUsd=>"ETH-USD".to_string(),
-            ProductId::EthBtc=>"ETH-BTC".to_string(),
-        }
-    }
-
 }
 
 #[derive(Debug, Serialize, Deserialize, Display, Clone, EnumIter, PartialEq)]

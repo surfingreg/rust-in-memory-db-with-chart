@@ -9,7 +9,7 @@ use crossbeam_channel::{unbounded, Sender};
 use std::sync::Arc;
 use tokio::runtime::Handle;
 use common_lib::{UniversalError, DbMsg};
-use common_lib::cb_ticker::TickerSource;
+use common_lib::cb_ticker::Datasource;
 use crate::calculation::refresh_calculations;
 use crate::event_book::EventBook;
 
@@ -55,59 +55,53 @@ fn receive(message: DbMsg, evt_book: &EventBook, tr: Handle) -> Result<(), Unive
             Ok(())
         },
 
-        DbMsg::Insert(ticker_type, ticker) => {
+        DbMsg::Insert(ticker_src, ticker) => {
 
-            match ticker_type{
-                TickerSource::Coinbase => {
-                    let _ = evt_book.push_log(TickerSource::Coinbase, &ticker);
-                    if let Err(e) = refresh_calculations(TickerSource::Coinbase, evt_book, ticker.product_id) {
+            tracing::debug!("[receive] insert ({ticker_src:?}): {:?}", &ticker);
+
+            match ticker_src {
+                Datasource::Coinbase => {
+                    let _ = evt_book.push_log(Datasource::Coinbase, &ticker);
+                    if let Err(e) = refresh_calculations(Datasource::Coinbase, evt_book, ticker.symbol) {
                         tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
                     }
                     Ok(())
                 }
-                TickerSource::Alpaca => {
-                    let _ = evt_book.push_log(TickerSource::Alpaca, &ticker);
-                    if let Err(e) = refresh_calculations(TickerSource::Alpaca, evt_book, ticker.product_id) {
-                        tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
-                    }
+                Datasource::Alpaca => {
+                    let _ = evt_book.push_log(Datasource::Alpaca, &ticker);
+                    // if let Err(e) = refresh_calculations(Datasource::Alpaca, evt_book, ticker.symbol) {
+                    //     tracing::error!("[process_message] refresh_calculations error: {:?}", &e);
+                    // }
                     Ok(())
                 }
             }
+        }
 
-
-        },
-
-        DbMsg::RqstChartMulti {ticker_source, sender, filter_prod_id} => {
+        DbMsg::RqstChartMulti {sender, symbol} => {
             let evt_book_read_lock = evt_book.book.read().unwrap();
-            let chart = match evt_book_read_lock.get(&ticker_source){
+
+            let mut chart = vec!();
+
+            let mut chart_cb = match evt_book_read_lock.get(&Datasource::Coinbase){
                 Some(evt_log)=>{
                     tr.block_on(async{
-                        evt_log.get_data_for_multi_line_chart(filter_prod_id, None, LIMIT_RETURN_SIZE).await
+                        evt_log.chart_since(Datasource::Coinbase, &symbol, None, LIMIT_RETURN_SIZE).await
                     })
                 },
                 None=> Err(UniversalError::DbError("RqstChartMulti".to_string())),
             }?;
 
-            // tracing::info!("[returning chart] {:?}", &chart);
-            match sender.send(chart) {
-                Err(e)=> {
-                    tracing::error!("[Msg::RequestChartRust] {:?}", &e);
-                    Err(UniversalError::SendError)
-                },
-                _ => Ok(()),
-            }
-        },
-
-        DbMsg::RqstChartMultiSince {ticker_source, sender, filter_prod_id, since} => {
-            let evt_book_read_lock = evt_book.book.read().unwrap();
-            let chart = match evt_book_read_lock.get(&ticker_source){
+            let mut chart_alp = match evt_book_read_lock.get(&Datasource::Alpaca){
                 Some(evt_log)=>{
                     tr.block_on(async{
-                        evt_log.get_data_for_multi_line_chart(filter_prod_id, Some(since), LIMIT_RETURN_SIZE).await
+                        evt_log.chart_since(Datasource::Alpaca, &symbol, None, LIMIT_RETURN_SIZE).await
                     })
                 },
-                None=> Err(UniversalError::DbError("RqstChartMultiSince".to_string())),
+                None=> Err(UniversalError::DbError("RqstChartMulti".to_string())),
             }?;
+
+            chart.append(&mut chart_cb);
+            chart.append(&mut chart_alp);
 
             // tracing::info!("[returning chart] {:?}", &chart);
             match sender.send(chart) {
@@ -117,7 +111,50 @@ fn receive(message: DbMsg, evt_book: &EventBook, tr: Handle) -> Result<(), Unive
                 },
                 _ => Ok(()),
             }
-        },
+        }
+
+        DbMsg::RqstChartSince {sender, symbol, since} => {
+
+            let mut chart = vec!();
+            let evt_book_read_lock = evt_book.book.read().unwrap();
+            let mut chart_cb = match evt_book_read_lock.get(&Datasource::Coinbase){
+                Some(evt_log)=>{
+                    tr.block_on(async{
+                        evt_log.chart_since(Datasource::Coinbase, &symbol, Some(since), LIMIT_RETURN_SIZE).await
+                    })
+                },
+                None => {
+                    tracing::info!("[DbMsg::RqstChartSince] no coinbase records found");
+                    // Err(UniversalError::DbError("RqstChartMultiSince".to_string()))
+                    Ok(vec!())
+                }
+            }?;
+
+            let mut chart_alpaca = match evt_book_read_lock.get(&Datasource::Alpaca){
+                Some(evt_log)=>{
+                    tr.block_on(async{
+                        evt_log.chart_since(Datasource::Alpaca, &symbol, Some(since), LIMIT_RETURN_SIZE).await
+                    })
+                },
+                None => {
+                    tracing::info!("[DbMsg::RqstChartSince] no alpaca records found");
+                    // Err(UniversalError::DbError("RqstChartMultiSince".to_string()))
+                    Ok(vec!())
+                }
+            }?;
+
+            chart.append(&mut chart_cb);
+            chart.append(&mut chart_alpaca);
+
+            // tracing::info!("[returning chart] {:?}", &chart);
+            match sender.send(chart) {
+                Err(e)=> {
+                    tracing::error!("[Msg::RequestChartRust] {:?}", &e);
+                    Err(UniversalError::SendError)
+                },
+                _ => Ok(()),
+            }
+        }
 
         // send a DataFrame back with 'select * from ..."
         DbMsg::RqstRaw {ticker_source, sender}=>{

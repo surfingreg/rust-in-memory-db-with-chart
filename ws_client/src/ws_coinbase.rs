@@ -2,7 +2,6 @@
 
 #[allow(dead_code)]
 
-use crate::coinbase::Coinbase;
 use crossbeam::channel::Sender;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -10,8 +9,49 @@ use std::net::TcpStream;
 use strum::IntoEnumIterator;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message, WebSocket};
-use common_lib::{DbMsg, ProductId};
-use common_lib::cb_ticker::TickerSource;
+use common_lib::{DbMsg};
+use common_lib::cb_ticker::{Datasource, SymbolCoinbase};
+use chrono::{DateTime, Utc};
+use common_lib::cb_ticker::TickerCoinbase;
+
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum CoinbasePacket {
+    Subscriptions(Subscriptions),
+    Heartbeat,
+    Ticker(TickerCoinbase),
+    // L2Update,
+    // Snapshot,
+    Error(Error),
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Channel {
+    name: String,
+    product_ids: Vec<String>,
+}
+
+///    "{\"type\":\"subscriptions\",\"channels\":[{\"name\":\"ticker\",\"product_ids\":[\"BTC-USD\"]}]}"
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "Subscription")]
+pub struct Subscriptions {
+    channels: Vec<Channel>,
+}
+
+/// https://docs.cloud.coinbase.com/exchange/docs/websocket-errors
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct Error {
+    #[serde(rename = "time")]
+    pub dtg: DateTime<Utc>,
+    #[serde(rename="type")]
+    coinbase_type:String,
+    message:String,
+}
 
 /// Todo: make websocket post-processing asynchronous
 pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<DbMsg>) {
@@ -32,14 +72,14 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<DbMsg>)
 
                     Ok(json)=>{
                         match json {
-                            Coinbase::Subscriptions(s) => tracing::debug!("[Coinbase::Subscriptions] {:?}", & s),
-                            Coinbase::Ticker(t) => {
-                                if let Err(e) = tx_db.send(DbMsg::Insert(TickerSource::Coinbase, t)) {
+                            CoinbasePacket::Subscriptions(s) => tracing::debug!("[Coinbase::Subscriptions] {:?}", & s),
+                            CoinbasePacket::Ticker(t) => {
+                                if let Err(e) = tx_db.send(DbMsg::Insert(Datasource::Coinbase, t.to_common())) {
                                     tracing::error!("[ws_process] send error: {:?}", & e);
                                 }
                             }
-                            Coinbase::Heartbeat => {
-                                tracing::debug!("[ws][text] {:?}", & t);
+                            CoinbasePacket::Heartbeat => {
+                                tracing::debug!("[ws_client][text] {:?}", & t);
                                 tracing::debug!("[Coinbase::Heartbeat]");
                                 panic!();
                             },
@@ -49,14 +89,14 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<DbMsg>)
                             //
                             // 					// to database
                             // 					if let Some(obj) = l2_update_opt {
-                            // 						// tracing::debug!("[ws] {:?}", &obj);
+                            // 						// tracing::debug!("[ws_client] {:?}", &obj);
                             // 						self.process_book_update(obj.changes);
                             // 					}
                             // 				},
                             // 				Some("snapshot") => {
-                            // 					// tracing::debug!("[ws] snapshot: {:?}", json_val);
-                            // 					let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws:snapshot] json conversion didn't work");
-                            // 					// tracing::debug!("[ws] snapshot: {:?}", snapshot_opt);
+                            // 					// tracing::debug!("[ws_client] snapshot: {:?}", json_val);
+                            // 					let snapshot_opt:Option<Snapshot> = serde_json::from_value(json_val).expect("[ws_client:snapshot] json conversion didn't work");
+                            // 					// tracing::debug!("[ws_client] snapshot: {:?}", snapshot_opt);
                             // 					if snapshot_opt.is_some() {
                             // 						let snap:Snapshot = snapshot_opt.unwrap();
                             // 						for buy in &snap.bids {
@@ -67,7 +107,7 @@ pub fn parse(mut ws: WebSocket<MaybeTlsStream<TcpStream>>, tx_db: Sender<DbMsg>)
                             // 						}
                             // 					}
                             // 				},
-                            Coinbase::Error(error) => {
+                            CoinbasePacket::Error(error) => {
                                 tracing::error!("[ws_process] coinbase error: {:?}", &error);
                             }
                         }
@@ -107,7 +147,7 @@ pub struct Subscribe {
 /// here's where we subscribe to all the possible products (BTC-USD, ETH-USC, ETH-BTC
 fn subscribe() -> serde_json::Value {
 
-    let prod_ids = ProductId::iter().map(|x|{x.to_string_coinbase()}).collect();
+    let prod_ids = SymbolCoinbase::iter().map(|x|{x.to_string_coinbase()}).collect();
 
     let cb_sub = Subscribe {
         typ: "subscribe".to_owned(),

@@ -72,8 +72,8 @@ function connect() {
     disconnect()
 
     const {location} = window
-    // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws'
-    // const wsUri = `${proto}://${location.host}/ws`
+    // const proto = location.protocol.startsWith('https') ? 'wss' : 'ws_client'
+    // const wsUri = `${proto}://${location.host}/ws_client`
     const wsUri = "ws://127.0.0.1:3012"
     // log('Connecting...')
     socket = new WebSocket(wsUri);

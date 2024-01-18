@@ -5,12 +5,11 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 use tokio::sync::oneshot;
-use common_lib::{ChartDataset, UniversalError, DbMsg, ProductId};
-use common_lib::cb_ticker::TickerSource;
+use common_lib::{ChartDataset, UniversalError, DbMsg, SymbolCommon};
 use common_lib::init::init;
 use db::arrow_db;
 use visual::http_server;
-use ws::connect::ConnectSource;
+use ws::client::ConnectSource;
 use ws_broadcast::command::Cmd;
 
 fn main() {
@@ -32,8 +31,8 @@ fn main() {
 
     // run coinbase and alpaca threads
     let mut handles = vec!();
-    handles.push(ws::connect::run(ConnectSource::Coinbase, tx_db.clone()));
-    handles.push(ws::connect::run(ConnectSource::Alpaca, tx_db.clone()));
+    handles.push(ws::client::run(ConnectSource::Coinbase, tx_db.clone()));
+    handles.push(ws::client::run(ConnectSource::Alpaca, tx_db.clone()));
 
     // broadcast websocket
     let (server_tx, server_rx) = crossbeam_channel::unbounded::<ws_broadcast::command::Cmd>();
@@ -65,14 +64,20 @@ fn main() {
 
 }
 
+/// Here's where the websocket server broadcasts data every second.
+///
 /// todo: potentially only send data since last websocket broadcast (results in annoying client side
 /// javascript so this current sends all chart data every second)
+///
+/// TODO: move this to websocket server.rs
 fn spawn_chart_refresher(tx_db: Sender<DbMsg>, server_tx: Sender<Cmd>) {
     tokio::spawn(async move {
         // a long, long time ago...
         let most_recent_date: DateTime<Utc> = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("2023-12-24T04:08:00-00:00").unwrap());
         loop {
-            match request_chart_multi_data_since(tx_db.clone(), most_recent_date).await{
+
+            // match request_chart_since(tx_db.clone(), Datasource::Alpaca, most_recent_date).await{
+            match request_chart_since(tx_db.clone(), most_recent_date).await{
                 Ok(chart_vec) => {
                     if let Ok(json_str) = serde_json::to_string::<Vec<ChartDataset>>(&chart_vec){
                         server_tx.send(Cmd::Broadcast(json_str)).unwrap();
@@ -102,9 +107,9 @@ fn _get_most_recent_date(chart_data: Vec<ChartDataset>) -> DateTime<Utc> {
 /// duplicated from visual
 ///
 /// TODO: currently coinbase-specific
-async fn request_chart_multi_data_since(tx_db: crossbeam_channel::Sender<DbMsg>, since: DateTime<Utc>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
+async fn request_chart_since(tx_db: Sender<DbMsg>, since: DateTime<Utc>) -> Result<Vec<ChartDataset>, Box<dyn Error>> {
     let (sender, rx) = oneshot::channel();
-    match tx_db.send(DbMsg::RqstChartMultiSince { ticker_source: TickerSource::Coinbase, sender, filter_prod_id: vec![ProductId::BtcUsd], since}) {
+    match tx_db.send(DbMsg::RqstChartSince { sender, symbol: vec![SymbolCommon::BtcUsd], since}) {
         Ok(_)=> {
             let chart = rx.await?;
             Ok(chart)

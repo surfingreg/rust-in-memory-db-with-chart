@@ -2,12 +2,13 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use common_lib::cb_ticker::{Ticker, TickerCalc, TickerSource};
+use common_lib::cb_ticker::{TickerCalc, Datasource};
+use common_lib::TickerCommon;
 use crate::event_log::EventLog;
 
 /// Container for multiple event logs keyed by a string
 pub struct EventBook {
-    pub book: Arc<RwLock<HashMap<TickerSource, EventLog>>>,
+    pub book: Arc<RwLock<HashMap<Datasource, EventLog>>>,
 }
 impl Default for EventBook {
     fn default() -> Self {
@@ -19,12 +20,12 @@ impl Default for EventBook {
 impl EventBook {
     pub fn new() -> EventBook {
         EventBook {
-            book: Arc::new(RwLock::new(HashMap::<TickerSource, EventLog>::new())),
+            book: Arc::new(RwLock::new(HashMap::<Datasource, EventLog>::new())),
         }
     }
 
     /// get write lock on the entire book and insert a new record
-    pub fn push_log(&self, key: TickerSource, val: &Ticker) -> Result<(), BookError> {
+    pub fn push_log(&self, key: Datasource, val: &TickerCommon) -> Result<(), BookError> {
         // write lock
         let mut book_writable = self.book.write().unwrap();
 
@@ -60,7 +61,7 @@ impl EventBook {
     }
 
     /// get write lock on the entire book and insert a new record
-    pub fn push_calc(&self, ticker_src:&TickerSource, val: &TickerCalc) -> Result<(), BookError> {
+    pub fn push_calc(&self, ticker_src:&Datasource, val: &TickerCalc) -> Result<(), BookError> {
         // tracing::debug!("[push_calc]");
 
         // write lock

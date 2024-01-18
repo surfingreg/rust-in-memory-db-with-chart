@@ -17,7 +17,7 @@ serde_json = "1.0.103"
 
 db = { path = "../db" }
 common_lib = { path="../common_lib"}
-ws_broadcast = { path="../ws_broadcast"}
+ws_broadcast = { path= "../ws_server" }
 visual = { path="../visual"}
-ws = { path= "../ws" }
+ws = { path= "../ws_client" }
 

@@ -1,4 +1,4 @@
-//! server.rs
+//! client
 
 use std::{net::TcpListener};
 use std::net::TcpStream;
@@ -17,7 +17,6 @@ pub struct Server {
     clients: Arc<Mutex<Vec<Arc<Mutex<WebSocket<TcpStream>>>>>>
 }
 impl Server {
-
 
     pub fn new()->Self {
         Server{ clients: Arc::new(Mutex::new(vec![])) }
@@ -157,9 +156,7 @@ impl Server {
     }
 
     fn send_broadcast(&mut self, msg:String) {
-
         for client in self.clients.lock().unwrap().iter() {
-
             match client.lock().unwrap().send(Message::Text(msg.clone())) {
                 Ok(_) => {},
                 Err(e) =>{

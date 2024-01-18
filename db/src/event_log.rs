@@ -5,7 +5,7 @@
 //! https://docs.rs/datafusion/latest/datafusion/datasource/memory/struct.MemTable.html
 //!
 
-use common_lib::cb_ticker::{Ticker, TickerCalc};
+use common_lib::cb_ticker::{Datasource, TickerCalc};
 use datafusion::arrow::array::{Date64Array, Float64Array, PrimitiveArray, StringArray};
 use datafusion::arrow::datatypes::{DataType, Date64Type, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
@@ -17,7 +17,7 @@ use std::sync::{Arc};
 use std::time::{Instant};
 use chrono::{DateTime, Utc};
 use strum::IntoEnumIterator;
-use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, UniversalError, ProductId};
+use common_lib::{CalculationId, ChartDataset, ChartTimeSeries, SymbolCommon, TickerCommon, UniversalError};
 
 const RING_BUF_SIZE: usize = 100;
 const NUM_CALCS: usize = 4;
@@ -28,7 +28,7 @@ const MAX_RANGE:f64 = 10.0;
 /// Ring buffer with ability to extract the entire buffer as a slice
 /// https://docs.rs/slice-ring-buffer/0.3.3/slice_ring_buffer/
 pub struct EventLog {
-    log: SliceRingBuffer<Ticker>,
+    log: SliceRingBuffer<TickerCommon>,
     calc_log: SliceRingBuffer<TickerCalc>,
 }
 
@@ -36,7 +36,7 @@ pub struct EventLog {
 impl EventLog {
     pub fn new() -> EventLog {
         EventLog {
-            log: SliceRingBuffer::<Ticker>::with_capacity(RING_BUF_SIZE),
+            log: SliceRingBuffer::<TickerCommon>::with_capacity(RING_BUF_SIZE),
             calc_log: SliceRingBuffer::<TickerCalc>::with_capacity(NUM_CALCS * RING_BUF_SIZE),
         }
     }
@@ -49,7 +49,7 @@ impl EventLog {
         self.log.is_empty()
     }
 
-    pub fn push_log(&mut self, ticker: &Ticker) -> Result<(), EventLogError> {
+    pub fn push_log(&mut self, ticker: &TickerCommon) -> Result<(), EventLogError> {
         self.log.push_front((*ticker).clone());
         Ok(())
     }
@@ -65,17 +65,17 @@ impl EventLog {
     ///
     /// todo: filter by product ID
     ///
-    pub async fn get_data_for_multi_line_chart(&self, filter_prod_id: Vec<ProductId>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, UniversalError>  {
+    pub async fn chart_since(&self, ds:Datasource, symbols: &Vec<SymbolCommon>, since: Option<DateTime<Utc>>, limit: usize) -> Result<Vec<ChartDataset>, UniversalError>  {
         let mut data: Vec<ChartDataset> = vec!();
 
         // "select...group by product_id..."
-        for product_id in filter_prod_id {
+        for symbol in symbols {
 
             // 'group by product_id', limit query target to 1000 (or fewer) after filtering(?)
             let time_series_data: Vec<ChartTimeSeries> = self.log.iter()
                 // .rev()
                 .filter(|f| {
-                    f.product_id == product_id
+                    f.symbol == *symbol
                         &&
                     if since.is_none() {
                         // no since specified
@@ -89,7 +89,7 @@ impl EventLog {
                 .collect();
 
             let chart = ChartDataset {
-                label: product_id.to_string(),
+                label: format!("{}_{}", symbol.to_string(), ds.to_string()),
                 data: time_series_data,
             };
             data.push(chart);
@@ -99,7 +99,7 @@ impl EventLog {
                 let time_series_f64: Vec<ChartTimeSeries> = self.calc_log
                     .iter()
                     .filter(|f|
-                        f.prod_id == product_id && f.calc_id == calc_id
+                        f.symbol == *symbol && f.calc_id == calc_id
                         &&
                         if since.is_none() {
                             // no since specified
@@ -113,7 +113,7 @@ impl EventLog {
                     .collect();
 
                 let chart = ChartDataset {
-                    label: format!("{}_{}", product_id.to_string(), calc_id.to_string()),
+                    label: format!("{}_{}_{}", symbol.to_string(), calc_id.to_string(), ds.to_string()),
                     data: time_series_f64,
                 };
                 data.push(chart);
@@ -123,7 +123,7 @@ impl EventLog {
     }
 
     /// Compute the average of the last N prices
-    pub fn calculate_moving_avg_n(&self, calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
+    pub fn calculate_moving_avg_n(&self, calc_id: &CalculationId, sym: &SymbolCommon) -> Result<TickerCalc, EventLogError> {
 
         // tracing::debug!("[calculate_moving_avg_n]");
         let slice_max = calc_id.value();
@@ -137,8 +137,8 @@ impl EventLog {
         };
 
         // todo: de-clone
-        let slice_n:&[Ticker] = &self.log.as_slice()[0..slice_max];
-        let slice_n:Vec<Ticker> = slice_n.iter().filter(|x| x.product_id == *prod_id).map(|x| x.clone()).collect();
+        let slice_n:&[TickerCommon] = &self.log.as_slice()[0..slice_max];
+        let slice_n:Vec<TickerCommon> = slice_n.iter().filter(|x| x.symbol == *sym).map(|x| x.clone()).collect();
         let avg_n: f64 = slice_n.iter().map(|x| x.price).sum::<f64>() / slice_n.len() as f64;
 
         let dtg_this_calc:DateTime<Utc> = if slice_n.len() > 0{
@@ -149,7 +149,7 @@ impl EventLog {
 
         Ok(TickerCalc{
             dtg: dtg_this_calc,
-            prod_id: prod_id.clone(),
+            symbol: sym.clone(),
             calc_id: calc_id.clone(),
             val: avg_n,
         })
@@ -159,12 +159,12 @@ impl EventLog {
     /// Rate of change for the moving average diff (quantify up/down rate of the trend)
     /// TODO: hard-coded BTC
 
-    pub fn calculate_diff_slope(&self, source_calc_id: &CalculationId, dest_calc_id: &CalculationId, prod_id: &ProductId) -> Result<TickerCalc, EventLogError> {
+    pub fn calculate_diff_slope(&self, source_calc_id: &CalculationId, dest_calc_id: &CalculationId, prod_id: &SymbolCommon) -> Result<TickerCalc, EventLogError> {
 
         // tracing::debug!("[calculate_diff_slope]");
 
         let slice_max = source_calc_id.value();
-        let r: Vec<&TickerCalc> = self.calc_log.iter().filter(|x| x.prod_id == *prod_id && x.calc_id == *source_calc_id).take(slice_max).collect();
+        let r: Vec<&TickerCalc> = self.calc_log.iter().filter(|x| x.symbol == *prod_id && x.calc_id == *source_calc_id).take(slice_max).collect();
 
         tracing::debug!("[calculate_diff_slope] r len: {}", r.len());
 
@@ -180,7 +180,7 @@ impl EventLog {
 
             Ok(TickerCalc{
                 dtg: r[0].dtg,
-                prod_id: prod_id.clone(),
+                symbol: prod_id.clone(),
                 calc_id: dest_calc_id.clone(),
                 val: slope,
             })
@@ -215,7 +215,7 @@ impl EventLog {
             product_ids = self
                 .log
                 .iter()
-                .map(|x| (x.product_id.to_string()).clone())
+                .map(|x| (x.symbol.to_string()).clone())
                 .collect();
             prices = self.log.iter().map(|x| x.price).collect();
 
@@ -355,34 +355,34 @@ pub enum EventLogError {
 mod tests {
     use db::event_log::EventLog;
     use chrono::{DateTime, Utc};
-    use common_lib::cb_ticker::{Ticker};
+    use common_lib::cb_ticker::{TickerCoinbase};
     use datafusion::arrow::util::pretty::pretty_format_batches;
-    use common_lib::{CalculationId, ProductId};
+    use common_lib::{CalculationId, SymbolCoinbase};
     use crate::event_log::EventLog;
 
     #[test]
     fn test_calculate_moving_avg_n(){
         let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
         let mut e_log = EventLog::new();
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::BtcUsd).unwrap();
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 10.0});
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &SymbolCoinbase::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 10.0);
 
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 30.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 30.0});
 
         // last 4 average should be 30; last 10 average should be 20
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::BtcUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &SymbolCoinbase::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 30.0);
 
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &ProductId::BtcUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0010, &SymbolCoinbase::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 20.0);
 
@@ -394,16 +394,16 @@ mod tests {
         let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
 
         let mut e_log = EventLog::new();
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::BtcUsd, price: 10.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
-        let _ = e_log.push_log(&Ticker { dtg: d1.clone(), product_id: ProductId::EthUsd, price: 500.0});
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::BtcUsd).unwrap();
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::BtcUsd, price: 10.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::EthUsd, price: 500.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::EthUsd, price: 500.0});
+        let _ = e_log.push_log(&TickerCoinbase { dtg: d1.clone(), symbol: SymbolCoinbase::EthUsd, price: 500.0});
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &SymbolCoinbase::BtcUsd).unwrap();
         println!("[test_calculate_moving_avg_n] test 2 mixed prod_id {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 10.0);
 
-        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &ProductId::EthUsd).unwrap();
+        let ticker_calc = e_log.calculate_moving_avg_n(&CalculationId::MovingAvg0004, &SymbolCoinbase::EthUsd).unwrap();
         println!("[test_calculate_moving_avg_n] test 2 mixed prod_id {:?}", ticker_calc);
         assert_eq!(ticker_calc.val, 500.0);
 
@@ -414,9 +414,9 @@ mod tests {
     fn test_struct_array_to_batch() {
         let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
         let mut e_log = EventLog::new();
-        let _ = e_log.push_log(&Ticker {
+        let _ = e_log.push_log(&TickerCoinbase {
             dtg: d1.clone(),
-            product_id: ProductId::BtcUsd,
+            symbol: SymbolCoinbase::BtcUsd,
             price: 88.87,
         });
         // let d2 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1997-12-19T16:39:57-08:00").unwrap());
@@ -442,9 +442,9 @@ mod tests {
     async fn test_query_memory() -> datafusion::error::Result<()> {
         let mut e_log = EventLog::new();
         let d1 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1996-12-19T16:39:57-08:00").unwrap());
-        let _ = e_log.push_log(&Ticker {
+        let _ = e_log.push_log(&TickerCoinbase {
             dtg: d1.clone(),
-            product_id: ProductId::BtcUsd,
+            symbol: SymbolCoinbase::BtcUsd,
             price: 88.87,
         });
         // let d2 = DateTime::<Utc>::from(DateTime::parse_from_rfc3339("1997-12-19T16:39:57-08:00").unwrap());

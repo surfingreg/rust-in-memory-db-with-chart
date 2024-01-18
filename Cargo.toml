@@ -2,10 +2,10 @@
 members = [
     "common_lib",
     "main",
-    "ws",
+    "ws_client",
     "db",
     "visual",
-    "ws_broadcast",
+    "ws_server",
 ]
 resolver = "2"
 
