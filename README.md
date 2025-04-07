@@ -1,4 +1,4 @@
-# Time-Series Visualiztion in Rust
+# Time-Series Visualization in Rust
 
 ## Task
 Implement a fast, in-memory, time-series database. Query data using SQL and visualize in ChartJS over websocket.
